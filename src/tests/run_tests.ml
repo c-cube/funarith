@@ -1,8 +1,7 @@
 
 open OUnit
-open Funarith
 
-module D = Diophantine.Make(Z)
+module D = Funarith_zarith.Diophantine
 
 let diophantine1 () =
   let module E = D.Homogeneous_eqn in
@@ -29,7 +28,13 @@ let suite =
     ];
   ]
 
+let props =
+  List.flatten
+    [ Test_prime.props;
+    ]
+
 let () =
+  CCFormat.set_color_default true;
   ignore (OUnit.run_test_tt suite);
-  ()
+  QCheck_runner.run_tests_main props
 

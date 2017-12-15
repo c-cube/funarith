@@ -20,14 +20,13 @@ remove: [
     ["ocamlfind" "remove" "funarith"]
 ]
 depends: [
+  "containers"
   "ocamlfind"
-  "zarith" { test }
   "ounit" { test }
   "jbuilder" {build}
 ]
 depopts: [
-  "delimcc"
-  "base-bigarray"
+  "zarith"
 ]
 tags: [ "arithmetic" ]
 homepage: "https://github.com/c-cube/funarith/"
