@@ -4,8 +4,6 @@
     We follow "Linear Diophantine Equations", S. Contejean.
 *)
 
-module type INT = Diophantine_intf.INT
-
 module type S = Diophantine_intf.S
 
-module Make(Int : INT) : S with module Int = Int
+module Make(Int : Int.S) : S with module Int = Int

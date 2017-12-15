@@ -1,11 +1,9 @@
 
 module Fmt = CCFormat
 
-module type INT = Diophantine_intf.INT
-
 module type S = Diophantine_intf.S
 
-module Make(Int : INT) = struct
+module Make(Int : Int.S) = struct
   module Int = Int
 
   exception Bad_shape
