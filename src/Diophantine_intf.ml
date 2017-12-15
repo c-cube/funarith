@@ -42,7 +42,7 @@ module type S = sig
     val offset : t -> Int.t
 
     val make : Int.t array -> Int.t -> t
-      (** Make an equation *)
+    (** Make an equation *)
 
     val compute : t -> Int.t array -> Int.t
     (** Compute the value of the equation with the given values for

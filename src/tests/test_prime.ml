@@ -18,9 +18,9 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
         (
           Z.to_int n >= 4 &&
           Sequence.(2 -- Z.to_int n
-                   |> map Z.of_int
-                   |> for_all
-                   (fun m -> Z.equal m n || not (Z.equal Z.zero (Z.rem n m))))
+                    |> map Z.of_int
+                    |> for_all
+                      (fun m -> Z.equal m n || not (Z.equal Z.zero (Z.rem n m))))
         )
       in
       ref_res = Pr.is_prime ?cache n
