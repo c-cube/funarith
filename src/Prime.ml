@@ -43,10 +43,9 @@ module Make(I : Int.S) = struct
     let is_prime = ref true in
     while !is_prime && Int.compare !n bound < 0 do
       n := Int.succ !n;
-      if Int.sign (Int.rem n0 !n) = 0
-      then begin
-        is_prime := false;
-      end;
+      if Int.equal Int.zero (Int.rem n0 !n) then (
+        is_prime := false; (* also, break *)
+      );
     done;
     if !is_prime then None else Some !n
 
@@ -56,7 +55,8 @@ module Make(I : Int.S) = struct
       | Some c ->
         begin match Cache.find c n with
           | Some _ as res -> res
-          | None ->
+          | None -> None
+          | exception Not_found ->
             let d = find_divisor_raw_ n in
             Cache.add c n d;
             d
@@ -121,7 +121,8 @@ module Make(I : Int.S) = struct
   let primes_leq ?cache n0 k =
     let n = ref two in
     while Int.compare !n n0 <= 0 do
-      if is_prime ?cache !n then k !n
+      if is_prime ?cache !n then k !n;
+      n := Int.succ !n;
     done
 
 end
