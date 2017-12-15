@@ -25,8 +25,8 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
       in
       ref_res = Pr.is_prime ?cache n
     in
-    Q.Test.make ~count:200 ~long_factor:10 ~name:("is_prime_correct"^suffix)
-      (rand_n 100_000) prop
+    Q.Test.make ~count:2_000 ~long_factor:10 ~name:("is_prime_correct"^suffix)
+      (rand_n 1_000_000) prop
 
   let check_primes_leq_sound =
     let prop n = Pr.primes_leq ?cache n |> Sequence.for_all Pr.is_prime in
