@@ -1,8 +1,7 @@
 
 open OUnit
-open Funarith
 
-module D = Diophantine.Make(Z)
+module D = Funarith_zarith.Diophantine
 
 let diophantine1 () =
   let module E = D.Homogeneous_eqn in

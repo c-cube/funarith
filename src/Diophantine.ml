@@ -15,7 +15,7 @@ module Make(Int : Int.S) = struct
 
     let pp out (sol:t): unit =
       if Array.length sol=0 then Fmt.int out 0
-      else Fmt.array ~sep:(Fmt.return "@ + ") Int.pp_print out sol
+      else Fmt.array ~sep:(Fmt.return "@ + ") Int.pp out sol
   end
 
   module Homogeneous_eqn = struct
@@ -31,7 +31,7 @@ module Make(Int : Int.S) = struct
         if Int.equal Int.one e.(i) then (
           Fmt.fprintf out "X%d" i
         ) else (
-          Fmt.fprintf out "%a X%d" Int.pp_print e.(i) i
+          Fmt.fprintf out "%a X%d" Int.pp e.(i) i
         )
       done
 
@@ -119,12 +119,12 @@ module Make(Int : Int.S) = struct
 
     let pp out (t:t) : unit =
       if Array.length t.coeffs = 0 then (
-        Int.pp_print out t.offset
+        Int.pp out t.offset
       ) else if is_zero t.offset then (
         Homogeneous_eqn.pp out t.coeffs
       ) else (
         Fmt.fprintf out "%a + %a"
-          Homogeneous_eqn.pp t.coeffs Int.pp_print t.offset
+          Homogeneous_eqn.pp t.coeffs Int.pp t.offset
       )
 
     let compute (e:t) (arr:Int.t array) : Int.t =

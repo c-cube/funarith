@@ -17,7 +17,7 @@ module type S = sig
   val divexact : t -> t -> t (* TODO: specify *)
   val rem : t -> t -> t
   val sqrt : t -> t
-  val pp_print : t CCFormat.printer
+  val pp : t CCFormat.printer
 
   val probab_prime : t -> int -> int
   (** [probab_prime n strength] is a sound, fast, but incomplete

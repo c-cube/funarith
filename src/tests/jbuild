@@ -1,7 +1,7 @@
 
 (executable
   ((name run_tests)
-   (libraries (funarith qcheck oUnit))
+   (libraries (funarith funarith.zarith zarith qcheck oUnit))
    (flags (:standard -w +a-4-42-44-48-50-58-32-60@8 -color always))
   ))
 
