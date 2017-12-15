@@ -18,6 +18,9 @@ module type S = sig
   (** The given type of the variables *)
   type var
 
+  (** A map on variables *)
+  module Var_map : Map.S with type key = var
+
   (** The type of a (possibly not solved) linear system *)
   type t
 
@@ -27,15 +30,17 @@ module type S = sig
       (it can be derived from the original equations of the system) from which a
       bound can be deduced which contradicts an already given bound of the
       system. *)
-  type cert = var * (Q.t * var) list
+  type cert = {
+    cert_var: var;
+    cert_expr: (Q.t * var) list;
+  }
 
   (** Generic type returned when solving the simplex. A solution is a list of
       bindings that satisfies all the constraints inside the system. If the
       system is unsatisfiable, an explanation of type ['cert] is returned. *)
   type res =
-    | Solution of (var * Q.t) list
+    | Solution of Q.t Var_map.t
     | Unsatisfiable of cert
-
 
   (** {3 Simplex construction} *)
 
@@ -91,7 +96,9 @@ module type S = sig
   (* [get_full_assign s] returns the current values of all the variables present
      in the system.  Notice that it doesn't mean the assignment returned
      satisfies all bounds.*)
-  val get_full_assign : t -> (var * Q.t) list
+  val get_full_assign : t -> Q.t Var_map.t
+
+  val get_full_assign_l : t -> (var * Q.t) list
 
   (** [get_bounds s x] returns the pair [(low, upp)] of the current bounds for
       the variable [x].

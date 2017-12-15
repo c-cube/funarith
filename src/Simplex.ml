@@ -14,7 +14,7 @@ module type Var = Simplex_intf.Var
 module Make(Q : Rat.S)(Var: Var) = struct
 
   module Q = Q
-  module M = Map.Make(Var)
+  module M = CCMap.Make(Var)
 
   (* Exceptions *)
   exception Unsat of Var.t
@@ -26,6 +26,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
   type var = Var.t
   type erat = Q.t * Q.t
 
+  module Var_map = M
+
   type t = {
     tab : Q.t array array;
     basic : Var.t array;
@@ -34,9 +36,13 @@ module Make(Q : Rat.S)(Var: Var) = struct
     mutable bounds : (erat * erat) M.t; (* (lower, upper) *)
   }
 
-  type cert = var * (Q.t * var) list
+  type cert = {
+    cert_var: var;
+    cert_expr: (Q.t * var) list;
+  }
+
   type res =
-    | Solution of (Var.t * Q.t) list
+    | Solution of Q.t Var_map.t
     | Unsatisfiable of cert
 
   (* epsilon-rationals, used for strict bounds *)
@@ -164,9 +170,9 @@ module Make(Q : Rat.S)(Var: Var) = struct
   let add_vars t l =
     let l = List.filter (fun x -> not (mem x t.basic || mem x t.nbasic)) l in
     let l = list_uniq l in
-    if l = [] then
+    if l = [] then (
       t
-    else begin
+    ) else (
       let a = Array.of_list l in
       {
         tab = init_matrix (Array.length t.basic) (Array.length t.nbasic + Array.length a)
@@ -176,14 +182,20 @@ module Make(Q : Rat.S)(Var: Var) = struct
         assign = List.fold_left (fun acc y -> M.add y ezero acc) t.assign l;
         bounds = t.bounds;
       }
-    end
+    )
 
   let add_eq t (s, eq) =
-    if mem s t.basic || mem s t.nbasic then
+    if mem s t.basic || mem s t.nbasic then (
       raise (UnExpected "Variable already defined.");
+    );
     let t = add_vars t (List.map snd eq) in
     let new_eq = Array.make (Array.length t.nbasic) Q.zero in
-    List.iter (fun (c, x) -> Array.iteri (fun i c' -> new_eq.(i) <- Q.(new_eq.(i) + c * c')) (find_expr_total t x)) eq;
+    List.iter
+      (fun (c, x) ->
+         Array.iteri
+           (fun i c' -> new_eq.(i) <- Q.(new_eq.(i) + c * c'))
+           (find_expr_total t x))
+      eq;
     { t with
       tab = Array.append t.tab [| new_eq |];
       basic = Array.append t.basic [| s |];
@@ -231,8 +243,9 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   let change_bounds = add_bounds_imp ~force:true
 
-  let full_assign t = List.map (fun x -> (x, value t x))
-      (List.sort Var.compare (Array.to_list t.nbasic @ Array.to_list t.basic))
+  let full_assign t : (var * erat) Sequence.t =
+    Sequence.append (Sequence.of_array t.nbasic) (Sequence.of_array t.basic)
+    |> Sequence.map (fun x -> x, value t x)
 
   let min x y = if Q.compare x y < 0 then x else y
   let max x y = if Q.compare x y < 0 then y else x
@@ -260,10 +273,15 @@ module Make(Q : Rat.S)(Var: Var) = struct
     else
       !emax
 
-  let get_full_assign t =
+  let get_full_assign_seq t : _ Sequence.t =
     let e = solve_epsilon t in
     let f = evaluate e in
-    List.map (fun (x, v) -> (x, f v)) (full_assign t)
+    full_assign t
+    |> Sequence.map (fun (x,v) -> x, f v)
+
+  let get_full_assign t : Q.t Var_map.t = Var_map.of_seq (get_full_assign_seq t)
+
+  let get_full_assign_l t : _ list = get_full_assign_seq t |> Sequence.to_rev_list
 
   let find_suitable t x =
     let _, v = is_within t x in
@@ -352,11 +370,14 @@ module Make(Q : Rat.S)(Var: Var) = struct
       Solution (get_full_assign t)
     with
     | Unsat x ->
-      Unsatisfiable (x, List.combine
-                       (Array.to_list (find_expr_basic t x))
-                       (Array.to_list t.nbasic))
+      let cert_expr =
+        List.combine
+          (Array.to_list (find_expr_basic t x))
+          (Array.to_list t.nbasic)
+      in
+      Unsatisfiable { cert_var=x; cert_expr; }
     | AbsurdBounds x ->
-      Unsatisfiable (x, [])
+      Unsatisfiable { cert_var=x; cert_expr=[]; }
 
 
   (** External access functions *)
