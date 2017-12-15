@@ -1,6 +1,6 @@
 
 open OUnit
-open Libarith
+open Funarith
 
 module D = Diophantine.Make(Z)
 
