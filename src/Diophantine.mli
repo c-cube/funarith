@@ -6,4 +6,4 @@
 
 module type S = Diophantine_intf.S
 
-module Make(Int : Int.S) : S with module Int = Int
+module Make(Z : Int.S) : S with module Z = Z

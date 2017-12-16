@@ -2,19 +2,19 @@
 module type S = Prime_intf.S
 
 module Make(I : Int.S) = struct
-  module Int = I
+  module Z = I
 
-  module Tbl = Hashtbl.Make(Int)
+  module Tbl = Hashtbl.Make(Z)
 
   type divisor = {
-    prime : Int.t;
+    prime : Z.t;
     power : int;
   }
 
-  let two = Int.of_int 2
+  let two = Z.of_int 2
 
   module Cache = struct
-    type t = Int.t option Tbl.t (* maps to a divisor (if any) *)
+    type t = Z.t option Tbl.t (* maps to a divisor (if any) *)
 
     let clear tbl : unit =
       Tbl.clear tbl;
@@ -37,19 +37,19 @@ module Make(I : Int.S) = struct
   end
 
   (* primality test: find a divisor *)
-  let find_divisor_raw_ (n0:Int.t) : Int.t option =
-    let n = ref Int.one in
-    let bound = Int.succ (Int.sqrt n0) in
+  let find_divisor_raw_ (n0:Z.t) : Z.t option =
+    let n = ref Z.one in
+    let bound = Z.succ (Z.sqrt n0) in
     let is_prime = ref true in
-    while !is_prime && Int.compare !n bound < 0 do
-      n := Int.succ !n;
-      if Int.equal Int.zero (Int.rem n0 !n) then (
+    while !is_prime && Z.compare !n bound < 0 do
+      n := Z.succ !n;
+      if Z.equal Z.zero (Z.rem n0 !n) then (
         is_prime := false; (* also, break *)
       );
     done;
     if !is_prime then None else Some !n
 
-  let find_divisor cache n : Int.t option =
+  let find_divisor cache n : Z.t option =
     begin match cache with
       | None -> find_divisor_raw_ n
       | Some c ->
@@ -63,7 +63,7 @@ module Make(I : Int.S) = struct
         end
     end
 
-  let[@inline] is_prime_raw n = match Int.probab_prime n 7 with
+  let[@inline] is_prime_raw n = match Z.probab_prime n 7 with
     | 0 -> false
     | 2 -> true
     | 1 ->
@@ -78,7 +78,7 @@ module Make(I : Int.S) = struct
       | None -> true
       | Some _ -> false
       | exception Not_found ->
-        begin match Int.probab_prime n 7 with
+        begin match Z.probab_prime n 7 with
           | 0 -> false
           | 2 -> Cache.add_prime_ c n; true
           | 1 ->
@@ -98,7 +98,7 @@ module Make(I : Int.S) = struct
     | [], _ -> l2
     | _, [] -> l1
     | p1::l1', p2::l2' ->
-      match Int.compare p1.prime p2.prime with
+      match Z.compare p1.prime p2.prime with
         | 0 ->
           {prime=p1.prime; power=p1.power+p2.power} :: merge_ l1' l2'
         | n when n < 0 ->
@@ -109,7 +109,7 @@ module Make(I : Int.S) = struct
     begin match find_divisor cache n with
       | None -> [{prime=n; power=1;}]
       | Some q1 ->
-        let q2 = Int.divexact n q1 in
+        let q2 = Z.divexact n q1 in
         merge_ (decompose_rec ~cache q1) (decompose_rec ~cache q2)
     end
 
@@ -120,9 +120,9 @@ module Make(I : Int.S) = struct
 
   let primes_leq ?cache n0 k =
     let n = ref two in
-    while Int.compare !n n0 <= 0 do
+    while Z.compare !n n0 <= 0 do
       if is_prime ?cache !n then k !n;
-      n := Int.succ !n;
+      n := Z.succ !n;
     done
 
 end

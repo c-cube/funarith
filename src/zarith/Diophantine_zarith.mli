@@ -1,2 +1,2 @@
 
-include Funarith.Diophantine.S with module Int = Int_zarith
+include Funarith.Diophantine.S with type Z.t = Z.t
