@@ -18,6 +18,6 @@ module type S = sig
   val inf : t
   val minus_inf : t
 
-  val print : t CCFormat.printer
+  val pp : t CCFormat.printer
 
 end
