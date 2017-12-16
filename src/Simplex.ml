@@ -119,12 +119,12 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   let find_expr_basic t x =
     match index x t.basic with
-    | -1 -> raise (UnExpected "Trying to find an expression for a non-basic variable.")
-    | i -> t.tab.(i)
+      | -1 -> raise (UnExpected "Trying to find an expression for a non-basic variable.")
+      | i -> t.tab.(i)
 
   let find_expr_nbasic t x =
     Array.init (Array.length t.nbasic) (fun j ->
-        if Var.compare x t.nbasic.(j) = 0 then Q.one else Q.zero)
+      if Var.compare x t.nbasic.(j) = 0 then Q.one else Q.zero)
 
   let find_expr_total t x =
     if mem x t.basic then
@@ -136,8 +136,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   let find_coef t x y =
     match index x t.basic, index y t.nbasic with
-    | -1, _ | _, -1 -> assert false
-    | i, j -> t.tab.(i).(j)
+      | -1, _ | _, -1 -> assert false
+      | i, j -> t.tab.(i).(j)
 
   let value t x =
     try
@@ -197,8 +197,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
            (find_expr_total t x))
       eq;
     { t with
-      tab = Array.append t.tab [| new_eq |];
-      basic = Array.append t.basic [| s |];
+        tab = Array.append t.tab [| new_eq |];
+        basic = Array.append t.basic [| s |];
     }
 
   let add_bound_aux t (x, low, upp) =
@@ -254,16 +254,16 @@ module Make(Q : Rat.S)(Var: Var) = struct
     let emin = ref Q.minus_inf in
     let emax = ref Q.inf in
     M.iter (fun x ((low,e1), (upp,e2)) ->
-        let v,e = value t x in
-        if Q.(e - e1 > zero) then
-          emin := max !emin Q.((low - v) / (e - e1))
-        else if Q.(e - e1 < zero) then (* shoudln't happen as *)
-          emax := min !emax Q.((low - v) / (e - e1));
-        if Q.(e - e2 > zero) then
-          emax := min !emax Q.((upp - v) / (e - e2))
-        else if Q.(e - e2 < zero) then
-          emin := max !emin Q.((upp - v) / (e - e2));
-      ) t.bounds;
+      let v,e = value t x in
+      if Q.(e - e1 > zero) then
+        emin := max !emin Q.((low - v) / (e - e1))
+      else if Q.(e - e1 < zero) then (* shoudln't happen as *)
+        emax := min !emax Q.((low - v) / (e - e1));
+      if Q.(e - e2 > zero) then
+        emax := min !emax Q.((upp - v) / (e - e2))
+      else if Q.(e - e2 < zero) then
+        emin := max !emin Q.((upp - v) / (e - e2));
+    ) t.bounds;
     if Q.equal Q.minus_inf !emin && Q.equal Q.inf !emax then
       Q.zero
     else if Q.compare !emin Q.zero > 0 then
@@ -307,7 +307,7 @@ module Make(Q : Rat.S)(Var: Var) = struct
     in
     try
       List.hd (List.sort (fun x y -> Var.compare (fst x) (fst y))
-                 (aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x))))
+          (aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x))))
     with Failure _ ->
       raise NoneSuitable
 
@@ -369,15 +369,15 @@ module Make(Q : Rat.S)(Var: Var) = struct
       solve_aux t;
       Solution (get_full_assign t)
     with
-    | Unsat x ->
-      let cert_expr =
-        List.combine
-          (Array.to_list (find_expr_basic t x))
-          (Array.to_list t.nbasic)
-      in
-      Unsatisfiable { cert_var=x; cert_expr; }
-    | AbsurdBounds x ->
-      Unsatisfiable { cert_var=x; cert_expr=[]; }
+      | Unsat x ->
+        let cert_expr =
+          List.combine
+            (Array.to_list (find_expr_basic t x))
+            (Array.to_list t.nbasic)
+        in
+        Unsatisfiable { cert_var=x; cert_expr; }
+      | AbsurdBounds x ->
+        Unsatisfiable { cert_var=x; cert_expr=[]; }
 
 
   (** External access functions *)
