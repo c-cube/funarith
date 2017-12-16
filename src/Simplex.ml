@@ -22,18 +22,24 @@ module Make(Q : Rat.S)(Var: Var) = struct
   exception NoneSuitable
   exception UnExpected of string
 
-  (* Type declarations *)
   type var = Var.t
-  type erat = Q.t * Q.t
+
+  (** Epsilon-rationals, used for strict bounds *)
+  type erat = {
+    lower: Q.t;
+    upper: Q.t;
+  }
 
   module Var_map = M
 
   type t = {
-    tab : Q.t array array;
-    basic : Var.t array;
-    nbasic : Var.t array;
-    mutable assign : erat M.t;
-    mutable bounds : (erat * erat) M.t; (* (lower, upper) *)
+    tab : Q.t array array; (* the matrix of coefficients *)
+    basic : Var.t array; (* basic variables *)
+    nbasic : Var.t array; (* non basic variables *)
+    mutable assign : erat M.t; (* assignments *)
+    mutable bounds : (erat * erat) M.t; (* (lower, upper) bounds for variables *)
+    mutable idx_basic : int M.t; (* basic var -> its index in [basic] *)
+    mutable idx_nbasic : int M.t; (* non basic var -> its index in [nbasic] *)
   }
 
   type cert = {
@@ -46,11 +52,12 @@ module Make(Q : Rat.S)(Var: Var) = struct
     | Unsatisfiable of cert
 
   (* epsilon-rationals, used for strict bounds *)
-  let ezero = Q.zero, Q.zero
-  let mul k (a,e) = Q.((k * a, k * e))
-  let sum (a,e1) (b,e2) = Q.((a + b, e1 + e2))
-  let compare (a,e1) (b,e2) = match Q.compare a b with
-    | 0 -> Q.compare e1 e2
+  let[@inline] emake lower upper : erat = {lower; upper}
+  let ezero : erat = {lower=Q.zero; upper=Q.zero}
+  let[@inline] mul k e = Q.(emake (k * e.lower) (k * e.upper))
+  let[@inline] sum e1 e2 = Q.(emake (e1.lower + e2.lower) (e1.upper + e2.upper))
+  let[@inline] compare e1 e2 = match Q.compare e1.lower e2.lower with
+    | 0 -> Q.compare e1.upper e2.upper
     | x -> x
 
   let lt a b = compare a b < 0
@@ -59,7 +66,7 @@ module Make(Q : Rat.S)(Var: Var) = struct
   let min x y = if compare x y <= 0 then x else y
   let max x y = if compare x y >= 0 then x else y
 
-  let evaluate epsilon (a,e) = Q.(a + epsilon * e)
+  let evaluate epsilon e = Q.(e.lower + epsilon * e.upper)
 
   (* Base manipulation functions *)
   let matrix_map f m =
@@ -70,11 +77,9 @@ module Make(Q : Rat.S)(Var: Var) = struct
     done
 
   let init_matrix line col f =
-    let m = Array.make_matrix line col (f 0 0) in
-    matrix_map (fun i j _ -> f i j) m;
-    m
+    Array.init line (fun i -> Array.init col (fun j -> f i j))
 
-  let copy_array a = Array.init (Array.length a) (fun i -> a.(i))
+  let copy_array = Array.copy
   let copy_matrix m =
     if Array.length m = 0 then
       init_matrix 0 0 (fun _ _ -> Q.zero)
@@ -82,12 +87,14 @@ module Make(Q : Rat.S)(Var: Var) = struct
       init_matrix (Array.length m) (Array.length m.(0))
         (fun i j -> m.(i).(j))
 
-  let empty = {
+  let empty : t = {
     tab = [| |];
     basic = [| |];
     nbasic = [| |];
     assign = M.empty;
     bounds = M.empty;
+    idx_basic = M.empty;
+    idx_nbasic = M.empty;
   }
 
   let copy t = {
@@ -96,50 +103,47 @@ module Make(Q : Rat.S)(Var: Var) = struct
     nbasic = copy_array t.nbasic;
     assign = t.assign;
     bounds = t.bounds;
+    idx_nbasic = t.idx_nbasic;
+    idx_basic = t.idx_basic;
   }
 
-  let index x a =
-    let i = ref (-1) in
-    let j = ref 0 in
-    while !i < 0 && !j < Array.length a do
-      if Var.compare x a.(!j) = 0 then i := !j;
-      incr j
-    done;
-    !i
+  let index_basic (t:t) (x:var) : int = match M.find x t.idx_basic with
+    | n -> n
+    | exception Not_found -> -1
 
-  let mem x a = index x a >= 0
+  let index_nbasic (t:t) (x:var) : int = match M.find x t.idx_nbasic with
+    | n -> n
+    | exception Not_found -> -1
 
-  let rec list_uniq = function
-    | [] -> []
-    | a :: r ->
-      let l = list_uniq r in
-      if List.exists (fun b -> Var.compare a b = 0) l then l else a :: l
+  let[@inline] mem_basic (t:t) (x:var) : bool = M.mem x t.idx_basic
+  let[@inline] mem_nbasic (t:t) (x:var) : bool = M.mem x t.idx_nbasic
 
-  let empty_expr n = Array.make n Q.zero
+  let[@inline] empty_expr n = Array.make n Q.zero
 
   let find_expr_basic t x =
-    match index x t.basic with
+    match index_basic t x with
       | -1 -> raise (UnExpected "Trying to find an expression for a non-basic variable.")
       | i -> t.tab.(i)
 
   let find_expr_nbasic t x =
-    Array.init (Array.length t.nbasic) (fun j ->
-      if Var.compare x t.nbasic.(j) = 0 then Q.one else Q.zero)
+    Array.init (Array.length t.nbasic)
+      (fun j -> if Var.compare x t.nbasic.(j) = 0 then Q.one else Q.zero)
 
-  let find_expr_total t x =
-    if mem x t.basic then
+  let find_expr_total (t:t) (x:var) : Q.t array =
+    if mem_basic t x then
       find_expr_basic t x
-    else if mem x t.nbasic then
+    else if mem_nbasic t x then
       find_expr_nbasic t x
     else
       raise (UnExpected "Unknown variable")
 
   let find_coef t x y =
-    match index x t.basic, index y t.nbasic with
+    match index_basic t x, index_nbasic t y with
       | -1, _ | _, -1 -> assert false
       | i, j -> t.tab.(i).(j)
 
-  let value t x =
+  (* extract a value for [x] *)
+  let value (t:t) (x:var) : erat =
     try
       M.find x t.assign
     with Not_found ->
@@ -153,39 +157,58 @@ module Make(Q : Rat.S)(Var: Var) = struct
     with Not_found ->
       raise (UnExpected "Basic variable in expression of a basic variable.")
 
-  let get_bounds t x =
+  let get_bounds (t:t) (x:var) : erat * erat =
     try M.find x t.bounds
-    with Not_found -> Q.((minus_inf, zero), (inf, zero))
+    with Not_found -> Q.(emake minus_inf zero, emake inf zero)
 
-  let is_within t x =
+  (* is [value x] within the bounds for [x]? *)
+  let is_within (t:t) (x:var) : bool * erat =
     let v = value t x in
     let low, upp = get_bounds t x in
-    if compare v low <= -1 then
-      (false, low)
-    else if compare v upp >= 1 then
-      (false, upp)
+    if compare v low < 0 then
+      false, low
+    else if compare v upp > 0 then
+      false, upp
     else
-      (true, v)
+      true, v
 
-  let add_vars t l =
-    let l = List.filter (fun x -> not (mem x t.basic || mem x t.nbasic)) l in
-    let l = list_uniq l in
-    if l = [] then (
-      t
-    ) else (
-      let a = Array.of_list l in
+  let[@inline] is_within_fst (t:t) (x:var) : bool = fst (is_within t x)
+
+  (* create a new system with additional (non basic) variables *)
+  let add_vars (t:t) (l:var list) : t =
+    (* add new variable to idx and array for nbasic, removing duplicates
+       and variables already present *)
+    let idx_nbasic, _, l_rev =
+      List.fold_left
+        (fun ((idx_nbasic, offset, l_rev) as acc) x ->
+           assert (not (mem_basic t x));
+           if M.mem x idx_nbasic then acc
+           else (
+             (* allocate new index for [x] *)
+             M.add x offset idx_nbasic, offset+1, x::l_rev
+           ))
+        (t.idx_basic, Array.length t.nbasic, [])
+        l
+    in
+    begin match l_rev with
+      | [] -> t
+      | _ ->
+      let a = Array.of_list (List.rev l_rev) in
       {
         tab = init_matrix (Array.length t.basic) (Array.length t.nbasic + Array.length a)
             (fun i j -> if j < Array.length t.nbasic then t.tab.(i).(j) else Q.zero);
-        basic = copy_array t.basic;
+        basic = copy_array t.basic; (* FIXME: why copy? *)
         nbasic = Array.append t.nbasic a;
         assign = List.fold_left (fun acc y -> M.add y ezero acc) t.assign l;
         bounds = t.bounds;
+        idx_nbasic;
+        idx_basic = t.idx_basic;
       }
-    )
+    end
 
-  let add_eq t (s, eq) =
-    if mem s t.basic || mem s t.nbasic then (
+  (* define basic variable [x] by [eq] in [t] *)
+  let add_eq (t:t) (x, eq) : t =
+    if mem_basic t x || mem_nbasic t x then (
       raise (UnExpected "Variable already defined.");
     );
     let t = add_vars t (List.map snd eq) in
@@ -198,66 +221,72 @@ module Make(Q : Rat.S)(Var: Var) = struct
       eq;
     { t with
         tab = Array.append t.tab [| new_eq |];
-        basic = Array.append t.basic [| s |];
+        basic = Array.append t.basic [| x |];
+        idx_basic = M.add x (Array.length t.basic) t.idx_basic;
     }
 
-  let add_bound_aux t (x, low, upp) =
+  (* add bounds to [x] in [t] *)
+  let add_bound_aux (t:t) x low upp : t =
     let t = add_vars t [x] in
     let l, u = get_bounds t x in
     { t with bounds = M.add x (max l low, min u upp) t.bounds }
 
-  let add_bounds t ?strict_lower:(slow=false) ?strict_upper:(supp=false) (x, l, u) =
+  let add_bounds (t:t) ?strict_lower:(slow=false) ?strict_upper:(supp=false) (x, l, u) : t =
     let t = copy t in
     let e1 = if slow then Q.one else Q.zero in
     let e2 = if supp then Q.neg Q.one else Q.zero in
-    let t = add_bound_aux t (x, (l,e1), (u,e2)) in
-    if mem x t.nbasic then
-      let (b, v) = is_within t x in
+    let t = add_bound_aux t x (emake l e1) (emake u e2) in
+    if mem_nbasic t x then (
+      let b, v = is_within t x in
       if b then
         t
       else
         { t with assign = M.add x v t.assign }
-    else
+    ) else
       t
 
   (* Modifies bounds in place. Do NOT export. *)
-  let add_bounds_imp
+  let add_bounds_mut
       ?force:(b=false) t
       ?strict_lower:(slow=false)
       ?strict_upper:(supp=false)
       (x, l, u) =
-    let low = (l, if slow then Q.one else Q.zero) in
-    let upp = (u, if supp then Q.neg Q.one else Q.zero) in
-    if mem x t.basic || mem x t.nbasic then begin
-      if b then
+    let low = emake l (if slow then Q.one else Q.zero) in
+    let upp = emake u (if supp then Q.neg Q.one else Q.zero) in
+    if mem_basic t x || mem_nbasic t x then (
+      if b then (
         t.bounds <- M.add x (low, upp) t.bounds
-      else
+      ) else (
         let low', upp' = get_bounds t x in
         t.bounds <- M.add x (max low low', min upp upp') t.bounds;
-        if mem x t.nbasic then
+        if mem_nbasic t x then (
           let (b, v) = is_within t x in
-          if not b then
+          if not b then (
             t.assign <- M.add x v t.assign
-    end else
+          )
+        )
+      )
+    ) else
       raise (UnExpected "Variable doesn't exists")
 
-  let change_bounds = add_bounds_imp ~force:true
+  let change_bounds = add_bounds_mut ~force:true
 
-  let full_assign t : (var * erat) Sequence.t =
+  (* full assignment *)
+  let full_assign (t:t) : (var * erat) Sequence.t =
     Sequence.append (Sequence.of_array t.nbasic) (Sequence.of_array t.basic)
     |> Sequence.map (fun x -> x, value t x)
 
-  let min x y = if Q.compare x y < 0 then x else y
-  let max x y = if Q.compare x y < 0 then y else x
+  let[@inline] min x y = if Q.compare x y < 0 then x else y
+  let[@inline] max x y = if Q.compare x y < 0 then y else x
 
-  let solve_epsilon t =
+  let solve_epsilon (t:t) : Q.t =
     let emin = ref Q.minus_inf in
     let emax = ref Q.inf in
-    M.iter (fun x ((low,e1), (upp,e2)) ->
-      let v,e = value t x in
+    M.iter (fun x ({lower=low;upper=e1}, {lower=upp;upper=e2}) ->
+      let {lower=v; upper=e} = value t x in
       if Q.(e - e1 > zero) then
         emin := max !emin Q.((low - v) / (e - e1))
-      else if Q.(e - e1 < zero) then (* shoudln't happen as *)
+      else if Q.(e - e1 < zero) then (* shoudln't happen as *) (* TODO: what? *)
         emax := min !emax Q.((low - v) / (e - e1));
       if Q.(e - e2 > zero) then
         emax := min !emax Q.((upp - v) / (e - e2))
@@ -273,7 +302,7 @@ module Make(Q : Rat.S)(Var: Var) = struct
     else
       !emax
 
-  let get_full_assign_seq t : _ Sequence.t =
+  let get_full_assign_seq (t:t) : _ Sequence.t =
     let e = solve_epsilon t in
     let f = evaluate e in
     full_assign t
@@ -283,18 +312,21 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   let get_full_assign_l t : _ list = get_full_assign_seq t |> Sequence.to_rev_list
 
-  let find_suitable t x =
+  (* find nbasic variable suitable for pivoting with [x] *)
+  let find_suitable_nbasic_for_pivot (t:t) (x:var) : var * Q.t =
+    assert (mem_basic t x);
     let _, v = is_within t x in
     let b = compare (value t x) v < 0 in
     let test y a =
       let v = value t y in
       let low, upp = get_bounds t y in
-      if b then
+      if b then (
         (lt v upp && Q.compare a Q.zero > 0) ||
         (gt v low && Q.compare a Q.zero < 0)
-      else
+      ) else (
         (gt v low && Q.compare a Q.zero > 0) ||
         (lt v upp && Q.compare a Q.zero < 0)
+      )
     in
     let rec aux l1 l2 = match l1, l2 with
       | [], [] -> []
@@ -305,33 +337,29 @@ module Make(Q : Rat.S)(Var: Var) = struct
           aux r1 r2
       | _, _ -> raise (UnExpected "Wrong list size")
     in
-    try
-      List.hd (List.sort (fun x y -> Var.compare (fst x) (fst y))
-          (aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x))))
-    with Failure _ ->
-      raise NoneSuitable
+    let l =
+      List.sort
+        (fun x y -> Var.compare (fst x) (fst y))
+        (aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x)))
+    in
+    begin match l with
+      | res :: _ -> res
+      | [] ->  raise NoneSuitable
+    end
 
-  let find_and_replace x l1 l2 =
-    let res = ref Q.zero in
-    let l = List.map2
-        (fun a y -> if Var.compare x y = 0 then begin res := a; Q.zero end else a) l1 l2 in
-    !res, l
-
-  let subst x y a =
-    let k = index x a in
-    a.(k) <- y
-
-  let pivot t x y a =
+  (* pivot to exchange [x] and [y] *)
+  let pivot (t:t) (x:var) (y:var) (a:Q.t) : unit =
     (* Assignment change *)
     t.assign <- M.add x (value t x) (M.remove y t.assign);
     (* Matrix Pivot operation *)
-    let kx = index x t.basic in
-    let ky = index y t.nbasic in
+    let kx = index_basic t x in
+    let ky = index_nbasic t y in
     for j = 0 to Array.length t.nbasic - 1 do
-      if Var.compare y t.nbasic.(j) = 0 then
+      if Var.compare y t.nbasic.(j) = 0 then (
         t.tab.(kx).(j) <- Q.(one / a)
-      else
+      ) else (
         t.tab.(kx).(j) <- Q.(neg (t.tab.(kx).(j) / a))
+      )
     done;
     for i = 0 to Array.length t.basic - 1 do
       if i <> kx then begin
@@ -342,29 +370,39 @@ module Make(Q : Rat.S)(Var: Var) = struct
         done
       end
     done;
-    (* Switch x and y in basic and nbasiv vars *)
-    subst x y t.basic;
-    subst y x t.nbasic
+    (* Switch x and y in basic and nbasic vars *)
+    t.basic.(kx) <- y;
+    t.nbasic.(ky) <- y;
+    t.idx_basic <- t.idx_basic |> M.remove x |> M.add y kx;
+    t.idx_nbasic <- t.idx_nbasic |> M.remove y |> M.add x ky;
+    ()
 
-  let solve_aux t =
+  let solve_aux (t:t) : unit =
+    (* check bounds *)
     M.iter (fun x (l, u) -> if gt l u then raise (AbsurdBounds x)) t.bounds;
-    try
-      while true do
-        let x =
-          List.find (fun y -> not (fst (is_within t y)))
-            (List.sort Var.compare (Array.to_list t.basic))
-        in
-        let _, v = is_within t x in
-        try
-          let y, a = find_suitable t x in
+    (* select a basic variable *)
+    let rec aux_select_basic_var () =
+      match
+        List.find (fun y -> not (is_within_fst t y))
+          (List.sort Var.compare (Array.to_list t.basic))
+      with
+        | x -> aux_pivot_on_basic x
+        | exception Not_found -> ()
+    (* remove the basic variable *)
+    and aux_pivot_on_basic x =
+      let _, v = is_within t x in
+      match find_suitable_nbasic_for_pivot t x with
+        | y, a ->
           pivot t x y a;
           t.assign <- M.add x v t.assign;
-        with NoneSuitable ->
+          aux_select_basic_var ()
+        | exception NoneSuitable ->
           raise (Unsat x)
-      done;
-    with Not_found -> ()
+    in
+    aux_select_basic_var ()
 
-  let solve t =
+  (* main method for the user to call *)
+  let solve (t:t) : res =
     try
       solve_aux t;
       Solution (get_full_assign t)
@@ -386,9 +424,15 @@ module Make(Q : Rat.S)(Var: Var) = struct
     Array.to_list t.nbasic,
     Array.to_list t.basic,
     List.map Array.to_list (Array.to_list t.tab)
-  let get_assign t = List.map (fun (x, (v,_)) -> (x,v)) (M.bindings t.assign)
-  let get_bounds t x = let ((l,_), (u,_)) = get_bounds t x in (l,u)
-  let get_all_bounds t = List.map (fun (x,((l,_),(u,_))) -> (x, (l, u))) (M.bindings t.bounds)
+
+  let get_assign t = List.map (fun (x, v) -> x,v.lower) (M.bindings t.assign)
+  let get_bounds t x =
+    let l, u = get_bounds t x in
+    l.lower, u.lower
+  let get_all_bounds t =
+    List.map
+      (fun (x,(l,u)) -> (x, (l.lower, u.lower)))
+      (M.bindings t.bounds)
 
 (*
   LEGACY : Branch&Bound implementation

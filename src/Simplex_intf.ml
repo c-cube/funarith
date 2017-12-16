@@ -80,7 +80,7 @@ module type S = sig
   (** {3 Access functions} *)
   (* TODO: add new access functions ? *)
 
-  (** [get_tab s] returns the current tableaux of [s] as a triple [(l, l', tab)]
+  (** [get_tab s] returns the current table of [s] as a triple [(l, l', tab)]
       where [l] is the list of the non-basic variables, [l'] the list of basic
       variables and [tab] the list of the rows of the tableaux in the same order
       as [l] and [l']. *)
