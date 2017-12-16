@@ -329,22 +329,26 @@ module Make(Q : Rat.S)(Var: Var) = struct
       )
     in
     let rec aux l1 l2 = match l1, l2 with
-      | [], [] -> []
-      | y :: r1, a :: r2 ->
-        if test y a then
-          (y, a) :: (aux r1 r2)
-        else
-          aux r1 r2
+      | [], [] -> None
+      | y :: tail1, a :: tail2 ->
+        if test y a then (
+          begin match aux tail1 tail2 with
+            | None -> Some (y,a)
+            | Some (z, _) as res_tail ->
+              if Var.compare y z <= 0
+              then Some (y,a)
+              else res_tail
+          end
+        ) else (
+          aux tail1 tail2
+        )
       | _, _ -> raise (UnExpected "Wrong list size")
     in
-    let l =
-      List.sort
-        (fun x y -> Var.compare (fst x) (fst y))
-        (aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x)))
-    in
-    begin match l with
-      | res :: _ -> res
-      | [] ->  raise NoneSuitable
+    begin match
+        aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x))
+      with
+        | Some res -> res
+        | None ->  raise NoneSuitable
     end
 
   (* pivot to exchange [x] and [y] *)
@@ -377,17 +381,33 @@ module Make(Q : Rat.S)(Var: Var) = struct
     t.idx_nbasic <- t.idx_nbasic |> M.remove y |> M.add x ky;
     ()
 
+  let find_min_filter ~cmp (f:'a -> bool) (l:'a list) : 'a option =
+    (* find the first element that satisfies [f] *)
+    let rec aux_find_first = function
+      | [] -> None
+      | x :: tail when f x -> aux_compare_with x tail
+      | _ :: tail -> aux_find_first tail
+    (* find if any element of [l] satisfies [f] and is smaller than [x] *)
+    and aux_compare_with x = function
+      | [] -> Some x
+      | y :: tail ->
+        let best = if f y && cmp y x < 0 then y else x in
+        aux_compare_with best tail
+    in
+    aux_find_first l
+
   let solve_aux (t:t) : unit =
     (* check bounds *)
     M.iter (fun x (l, u) -> if gt l u then raise (AbsurdBounds x)) t.bounds;
     (* select a basic variable *)
     let rec aux_select_basic_var () =
       match
-        List.find (fun y -> not (is_within_fst t y))
-          (List.sort Var.compare (Array.to_list t.basic))
+        find_min_filter ~cmp:Var.compare
+          (fun x -> not (is_within_fst t x))
+          (Array.to_list t.basic)
       with
-        | x -> aux_pivot_on_basic x
-        | exception Not_found -> ()
+        | Some x -> aux_pivot_on_basic x
+        | None -> ()
     (* remove the basic variable *)
     and aux_pivot_on_basic x =
       let _, v = is_within t x in
