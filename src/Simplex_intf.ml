@@ -2,7 +2,14 @@
   copyright (c) 2014, guillaume bury
   *)
 
-(** Modular and incremental implementation of the simplex. *)
+(** {1 Modular and incremental implementation of the general simplex}. *)
+
+(** The simplex is used as a decision procedure for linear rational arithmetic
+    problems.
+
+    More information can be found on the particular flavor of this
+    implementation at https://gbury.eu/public/papers/stage-m2.pdf
+*)
 
 (** The types of the variables used by the equations to solve *)
 module type Var = sig
