@@ -26,7 +26,7 @@ let rand_n low n : Z.t QC.arbitrary =
 let rand_q : Q.t QC.arbitrary =
   let n1 = rand_n ~-100 100 in
   let n2 = rand_n 1 50 in
-  let qc = 
+  let qc =
     QC.map ~rev:(fun q -> Q.num q, Q.den q)
       (fun (x,y) -> Q.make x y)
       (QC.pair n1 n2)
@@ -84,6 +84,23 @@ let pp_subst : Spl.subst Format.printer =
     pair ~sep:(return "@ @<1>→ ") Var.pp Q.pp_print
   )
 
+let check_invariants =
+  let prop pb =
+    let simplex = Spl.create() in
+    Spl.add_problem simplex pb;
+    Spl.check_invariants simplex
+  in
+  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants" Problem.rand prop
+
+let check_invariants_after_solve =
+  let prop pb =
+    let simplex = Spl.create() in
+    Spl.add_problem simplex pb;
+    ignore (Spl.solve simplex);
+    Spl.check_invariants simplex
+  in
+  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants_after_solve" Problem.rand prop
+
 let check_sound =
   let prop pb =
     let simplex = Spl.create() in
@@ -101,5 +118,6 @@ let check_sound =
   QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_sound" Problem.rand prop
 
 let props = [
+  check_invariants;
   check_sound;
 ]

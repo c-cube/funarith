@@ -123,6 +123,10 @@ module type S = sig
       variable not present in the return value is assumed to have no bounds
       (i.e lower bound [Zarith.Q.minus_inf] and upper bound [Zarith.Q.inf]). *)
   val get_all_bounds : t -> (var * (Q.t * Q.t)) list
+
+  (**/**)
+  val check_invariants : t -> bool (* check that all invariants hold *)
+  (**/**)
 end
 
 module type VAR_GEN = sig

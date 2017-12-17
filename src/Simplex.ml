@@ -80,6 +80,10 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
     val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
     val to_list : 'a t -> 'a list list
+
+    (**/**)
+    val check_invariants : _ t -> bool
+    (**/**)
   end = struct
     type 'a t = 'a Vec.vector Vec.vector
 
@@ -98,6 +102,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     let push_row m x = Vec.push m (Vec.make (dim2 m) x)
     let push_col m x = Vec.iter (fun row -> Vec.push row x) m
     let to_list m = List.map Vec.to_list (Vec.to_list m)
+
+    let check_invariants m = Vec.for_all (fun r -> Vec.length r = dim2 m) m
   end
 
   type t = {
@@ -157,6 +163,17 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   let[@inline] mem_basic (t:t) (x:var) : bool = M.mem x t.idx_basic
   let[@inline] mem_nbasic (t:t) (x:var) : bool = M.mem x t.idx_nbasic
+
+  (* check invariants, for test purposes *)
+  let check_invariants (t:t) : bool =
+    Mat.check_invariants t.tab &&
+    Vec.for_all (fun v -> mem_basic t v) t.basic &&
+    Vec.for_all (fun v -> mem_nbasic t v) t.nbasic &&
+    Vec.for_all (fun v -> not (mem_nbasic t v)) t.basic &&
+    Vec.for_all (fun v -> not (mem_basic t v)) t.nbasic &&
+    Vec.for_all (fun v -> Var_map.mem v t.assign) t.nbasic &&
+    Vec.for_all (fun v -> not (Var_map.mem v t.assign)) t.basic &&
+    true
 
   let[@inline] empty_expr n = Array.make n Q.zero
 
@@ -264,6 +281,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     (* add new row for defining [x] *)
     Mat.push_row t.tab Q.zero;
     let row_i = Mat.dim1 t.tab - 1 in
+    assert (row_i >= 0);
     List.iter
       (fun (c, x) ->
          Vec.iteri
