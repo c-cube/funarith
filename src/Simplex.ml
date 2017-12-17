@@ -1,19 +1,23 @@
 (*
-copyright (c) 2014, guillaume bury
-*)
+  copyright (c) 2014-2018, Guillaume Bury, Simon Cruanes
+  *)
 
 (* OPTIMS:
  * - distinguish separate systems (that do not interact), such as in { 1 <= 3x = 3y <= 2; z <= 3} ?
  * - Implement gomorry cuts ?
 *)
 
+open Containers
+
 module type S = Simplex_intf.S
-module type Var = Simplex_intf.Var
+module type VAR = Simplex_intf.VAR
+module type VAR_GEN = Simplex_intf.VAR_GEN
+module type CONSTRAINT = Simplex_intf.CONSTRAINT
 
 module Vec = CCVector
 
 (* Simplex Implementation *)
-module Make(Q : Rat.S)(Var: Var) = struct
+module Make(Q : Rat.S)(Var: VAR) = struct
 
   module Q = Q
   module M = CCMap.Make(Var)
@@ -284,6 +288,9 @@ module Make(Q : Rat.S)(Var: Var) = struct
         t.assign <- M.add x v t.assign;
       )
     )
+
+  let add_lower_bound t ?strict x l = add_bounds t ?strict_lower:strict (x,l,Q.inf)
+  let add_upper_bound t ?strict x u = add_bounds t ?strict_upper:strict (x,Q.minus_inf,u)
 
   (* Modifies bounds in place. Do NOT export. *)
   let add_bounds_mut
@@ -748,5 +755,119 @@ module Make(Q : Rat.S)(Var: Var) = struct
             (print_assign print_var) (M.bindings t.assign)
   *)
 
+end
+
+module Make_constr(Q : Rat.S)(Var : VAR_GEN) = struct
+  include Make(Q)(Var)
+
+  type subst = Q.t Var_map.t
+
+  module Expr = struct
+    type t = Q.t Var_map.t
+
+    let singleton c x = Var_map.singleton x c
+    let singleton1 x = Var_map.singleton x Q.one
+    let empty = Var_map.empty
+
+    let[@inline] map2 ~f a b =
+      Var_map.merge_safe
+        ~f:(fun _ rhs -> match rhs with
+          | `Left x | `Right x -> Some x
+          | `Both (x,y) -> f x y)
+        a b
+
+    let[@inline] some_if_nzero x = if Q.equal Q.zero x then None else Some x
+
+    let filter_map ~f m =
+      Var_map.fold
+        (fun x y m -> match f y with
+           | None -> m
+           | Some z -> Var_map.add x z m)
+        m Var_map.empty
+
+    module Infix = struct
+      let (+) = map2 ~f:(fun a b -> some_if_nzero Q.(a + b))
+      let (-) = map2 ~f:(fun a b -> some_if_nzero Q.(a - b))
+      let ( * ) q = filter_map ~f:(fun x -> some_if_nzero Q.(x * q))
+    end
+
+    include Infix
+
+    let of_list l =
+      Var_map.of_list (List.rev_map Pair.swap l)
+      |> Var_map.filter (fun _ q -> not (Q.equal Q.zero q))
+    let to_list e = Var_map.bindings e |> List.rev_map Pair.swap
+
+    let pp_pair = Format.(pair ~sep:(return "@ * ") Q.pp Var.pp)
+    let pp out (e:t) = Format.(hovbox @@ list ~sep:(return "@ + ") pp_pair) out (to_list e)
+
+    let eval (subst : subst) (e:t) : Q.t =
+      Var_map.fold
+        (fun x c acc -> Q.(acc + c * (Var_map.find x subst)))
+        e Q.zero
+  end
+
+  module Constr = struct
+    type op = Leq | Geq | Lt | Gt | Eq
+
+    let pp_op out o =
+      Format.string out
+        (match o with
+          | Leq -> "=<" | Geq -> ">=" | Lt -> "<" | Gt -> ">" | Eq -> "=")
+
+    type t = {
+      op: op;
+      expr: Expr.t;
+      const: Q.t;
+    }
+
+    let make op expr const : t = {op;expr;const}
+    let op t = t.op
+    let expr t = t.expr
+    let const t = t.const
+
+    let pp out c =
+      Format.fprintf out "@[%a@ %a %a@]" Expr.pp c.expr pp_op c.op Q.pp c.const
+
+    let eval (subst:subst) (c:t) : bool =
+      let v = Expr.eval subst c.expr in
+      begin match c.op with
+        | Leq -> Q.compare v c.const <= 0
+        | Geq -> Q.compare v c.const >= 0
+        | Lt -> Q.compare v c.const < 0
+        | Gt -> Q.compare v c.const > 0
+        | Eq -> Q.compare v c.const = 0
+      end
+  end
+
+  module Problem = struct
+    type t = Constr.t list
+
+    module Infix = struct
+      let (&&) = List.append
+    end
+    include Infix
+
+    let eval subst = List.for_all (Constr.eval subst)
+
+    let pp = Format.(hvbox @@ list ~sep:(return "@ @<1>∧ ") Constr.pp)
+  end
+
+  let fresh_var = Var.Fresh.create()
+
+  (* add a constraint *)
+  let add_constr (t:t) (c:Constr.t) : unit =
+    let (x:basic_var) = Var.Fresh.fresh fresh_var in
+    let q = Constr.const c in
+    add_eq t (x, Expr.to_list (Constr.expr c));
+    begin match c.Constr.op with
+      | Constr.Leq -> add_lower_bound t ~strict:false x q
+      | Constr.Geq -> add_upper_bound t ~strict:false x q
+      | Constr.Lt -> add_lower_bound t ~strict:true x q
+      | Constr.Gt -> add_upper_bound t ~strict:true x q
+      | Constr.Eq -> add_bounds t ~strict_lower:false ~strict_upper:false (x,q,q)
+    end
+
+  let add_problem (t:t) (pb:Problem.t) : unit = List.iter (add_constr t) pb
 end
 

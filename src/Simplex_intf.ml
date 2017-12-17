@@ -1,5 +1,5 @@
 (*
-  copyright (c) 2014, guillaume bury
+  copyright (c) 2014-2018, Guillaume Bury, Simon Cruanes
   *)
 
 (** {1 Modular and incremental implementation of the general simplex}. *)
@@ -12,13 +12,12 @@
 *)
 
 (** The types of the variables used by the equations to solve *)
-module type Var = sig
+module type VAR = sig
   type t
   val compare : t -> t -> int
 end
 
 module type S = sig
-
   (** Rational number implementation *)
   module Q : Rat.S
 
@@ -26,7 +25,7 @@ module type S = sig
   type var
 
   (** A map on variables *)
-  module Var_map : Map.S with type key = var
+  module Var_map : CCMap.S with type key = var
 
   (** The type of a (possibly not solved) linear system *)
   type t
@@ -70,6 +69,10 @@ module type S = sig
       Optional parameters allow to make the the bounds strict. Defaults to false,
       so that bounds are large by default. *)
   val add_bounds : t -> ?strict_lower:bool -> ?strict_upper:bool -> var * Q.t * Q.t -> unit
+
+  val add_lower_bound : t -> ?strict:bool -> var -> Q.t -> unit
+
+  val add_upper_bound : t -> ?strict:bool -> var -> Q.t -> unit
 
   (** {3 Simplex solving} *)
 
@@ -120,6 +123,76 @@ module type S = sig
       variable not present in the return value is assumed to have no bounds
       (i.e lower bound [Zarith.Q.minus_inf] and upper bound [Zarith.Q.inf]). *)
   val get_all_bounds : t -> (var * (Q.t * Q.t)) list
+end
 
+module type VAR_GEN = sig
+  include VAR
+
+  val pp : t CCFormat.printer
+
+  (** Generate fresh variables on demand *)
+  module Fresh : sig
+    type var = t
+
+    type t
+    val create : unit -> t
+    val fresh : t -> var
+  end
+end
+
+module type CONSTRAINT = sig
+  include S
+
+  type subst = Q.t Var_map.t
+
+  module Expr : sig
+    type t = Q.t Var_map.t
+    val empty : t
+    val singleton : Q.t -> var -> t
+    val singleton1 : var -> t
+    module Infix : sig
+      val (+) : t -> t -> t
+      val (-) : t -> t -> t
+      val ( * ) : Q.t -> t -> t
+    end
+    include module type of Infix
+    val of_list : (Q.t * var) list -> t
+    val to_list : t -> (Q.t * var) list
+    val pp : t CCFormat.printer
+    val eval : subst -> t -> Q.t
+  end
+
+  module Constr : sig
+    type op = Leq | Geq | Lt | Gt | Eq
+
+    type t = {
+      op: op;
+      expr: Expr.t;
+      const: Q.t;
+    }
+
+    val make : op -> Expr.t -> Q.t -> t
+    val op : t -> op
+    val expr : t -> Expr.t
+    val const : t -> Q.t
+    val pp : t CCFormat.printer
+
+    val eval : subst -> t -> bool
+  end
+
+  module Problem : sig
+    type t = Constr.t list
+    module Infix : sig
+      val ( && ) : t -> t -> t
+    end
+    include module type of Infix
+    val eval : subst -> t -> bool
+    val pp : t CCFormat.printer
+  end
+
+  val add_constr : t -> Constr.t -> unit
+  (** Add a constraint *)
+
+  val add_problem : t -> Problem.t -> unit
 end
 
