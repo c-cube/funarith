@@ -151,6 +151,7 @@ module type CONSTRAINT = sig
 
   module Expr : sig
     type t = Q.t Var_map.t
+    val is_empty : t -> bool
     val empty : t
     val singleton : Q.t -> var -> t
     val singleton1 : var -> t

@@ -75,8 +75,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     val set : 'a t -> int -> int -> 'a -> unit
     val get_row : 'a t -> int -> 'a Vec.vector
     val copy : 'a t -> 'a t
-    val dim1 : _ t -> int
-    val dim2 : _ t -> int
+    val n_row : _ t -> int
+    val n_col : _ t -> int
     val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
     val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
     val to_list : 'a t -> 'a list list
@@ -85,25 +85,33 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     val check_invariants : _ t -> bool
     (**/**)
   end = struct
-    type 'a t = 'a Vec.vector Vec.vector
+    type 'a t = {
+      mutable n_col: int; (* num of columns *)
+      tab: 'a Vec.vector Vec.vector;
+    }
 
-    let[@inline] create() = Vec.create()
+    let[@inline] create() : _ = {tab=Vec.create(); n_col=0}
 
-    let[@inline] init n m f = Vec.init n (fun i -> Vec.init m (fun j -> f i j))
+    let[@inline] init n m f = {
+      tab=Vec.init n (fun i -> Vec.init m (fun j -> f i j));
+      n_col=m;
+    }
 
-    let[@inline] get m i j = Vec.get (Vec.get m i) j
-    let[@inline] get_row m i = Vec.get m i
-    let[@inline] set (m:_ t) i j x = Vec.set (Vec.get m i) j x
-    let[@inline] copy m = Vec.map Vec.copy m
+    let[@inline] get m i j = Vec.get (Vec.get m.tab i) j
+    let[@inline] get_row m i = Vec.get m.tab i
+    let[@inline] set (m:_ t) i j x = Vec.set (Vec.get m.tab i) j x
+    let[@inline] copy m = {m with tab=Vec.map Vec.copy m.tab}
 
-    let[@inline] dim1 m = Vec.length m
-    let[@inline] dim2 m = if Vec.is_empty m then 0 else Vec.length (Vec.get m 0)
+    let[@inline] n_row m = Vec.length m.tab
+    let[@inline] n_col m = m.n_col
 
-    let push_row m x = Vec.push m (Vec.make (dim2 m) x)
-    let push_col m x = Vec.iter (fun row -> Vec.push row x) m
-    let to_list m = List.map Vec.to_list (Vec.to_list m)
+    let push_row m x = Vec.push m.tab (Vec.make (n_col m) x)
+    let push_col m x =
+      m.n_col <- m.n_col + 1;
+      Vec.iter (fun row -> Vec.push row x) m.tab
+    let to_list m = List.map Vec.to_list (Vec.to_list m.tab)
 
-    let check_invariants m = Vec.for_all (fun r -> Vec.length r = dim2 m) m
+    let check_invariants m = Vec.for_all (fun r -> Vec.length r = n_col m) m.tab
   end
 
   type t = {
@@ -187,9 +195,11 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* build the expression [y = \sum_i (if x_i=y then 1 else 0)·x_i] *)
   let find_expr_nbasic t (x:nbasic_var) : Q.t Vec.vector =
-    Vec.init (Vec.length t.nbasic)
-      (fun j -> if Var.compare x (Vec.get t.nbasic j) = 0 then Q.one else Q.zero)
+    Vec.map
+      (fun y -> if Var.compare x y = 0 then Q.one else Q.zero)
+      t.nbasic
 
+  (* TODO: avoid double lookup in maps *)
   (* find expression of [x] *)
   let find_expr_total (t:t) (x:var) : Q.t Vec.vector =
     if mem_basic t x then
@@ -201,7 +211,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* find coefficient of nbasic variable [y] in the definition of
      basic variable [x] *)
-  let[@inline] find_coef (t:t) (x:var) (y:var) : Q.t =
+  let find_coef (t:t) (x:var) (y:var) : Q.t =
     begin match index_basic t x, index_nbasic t y with
       | -1, _ | _, -1 -> assert false
       | i, j -> Mat.get t.tab i j
@@ -252,24 +262,26 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let add_vars (t:t) (l:var list) : unit =
     (* add new variable to idx and array for nbasic, removing duplicates
        and variables already present *)
-    let idx_nbasic, _, l_rev =
+    let idx_nbasic, _, l =
       List.fold_left
-        (fun ((idx_nbasic, offset, l_rev) as acc) x ->
-           assert (not (mem_basic t x));
-           if M.mem x idx_nbasic then acc
+        (fun ((idx_nbasic, offset, l) as acc) x ->
+           if mem_basic t x then acc
+           else if M.mem x idx_nbasic then acc
            else (
              (* allocate new index for [x] *)
-             M.add x offset idx_nbasic, offset+1, x::l_rev
+             M.add x offset idx_nbasic, offset+1, x::l
            ))
-        (t.idx_basic, Vec.length t.nbasic, [])
+        (t.idx_nbasic, Vec.length t.nbasic, [])
         l
     in
-    let l = List.rev l_rev in
     (* add new columns to the matrix *)
+    let old_dim = Mat.n_col t.tab in
     List.iter (fun _ -> Mat.push_col t.tab Q.zero) l;
-    Vec.append_list t.nbasic l;
+    assert (old_dim + List.length l = Mat.n_col t.tab);
+    Vec.append_list t.nbasic (List.rev l);
+    (* assign these variables *)
     t.assign <- List.fold_left (fun acc y -> M.add y Erat.zero acc) t.assign l;
-    t.idx_basic <- idx_nbasic;
+    t.idx_nbasic <- idx_nbasic;
     ()
 
   (* define basic variable [x] by [eq] in [t] *)
@@ -278,15 +290,26 @@ module Make(Q : Rat.S)(Var: VAR) = struct
       unexpected "Variable already defined.";
     );
     add_vars t (List.map snd eq);
+    (* add [x] as a basic var *)
+    t.idx_basic <- M.add x (Vec.length t.basic) t.idx_basic;
+    Vec.push t.basic x;
     (* add new row for defining [x] *)
+    assert (Mat.n_col t.tab > 0);
     Mat.push_row t.tab Q.zero;
-    let row_i = Mat.dim1 t.tab - 1 in
+    let row_i = Mat.n_row t.tab - 1 in
     assert (row_i >= 0);
+    (* now put into the row the coefficients corresponding to [eq],
+       expanding basic variables to their definition *)
     List.iter
       (fun (c, x) ->
+         let expr = find_expr_total t x in
+         assert (Vec.length expr = Mat.n_col t.tab);
          Vec.iteri
-           (fun j c' -> Mat.set t.tab row_i j Q.(Mat.get t.tab row_i j + c * c'))
-           (find_expr_total t x))
+           (fun j c' ->
+              if not (Q.equal Q.zero c') then (
+                Mat.set t.tab row_i j Q.(Mat.get t.tab row_i j + c * c')
+              ))
+           expr)
       eq;
     ()
 
@@ -786,6 +809,7 @@ module Make_constr(Q : Rat.S)(Var : VAR_GEN) = struct
     let singleton c x = Var_map.singleton x c
     let singleton1 x = Var_map.singleton x Q.one
     let empty = Var_map.empty
+    let is_empty = Var_map.is_empty
 
     let[@inline] map2 ~f a b =
       Var_map.merge_safe
@@ -845,7 +869,7 @@ module Make_constr(Q : Rat.S)(Var : VAR_GEN) = struct
     let const t = t.const
 
     let pp out c =
-      Format.fprintf out "@[%a@ %a %a@]" Expr.pp c.expr pp_op c.op Q.pp c.const
+      Format.fprintf out "(@[%a@ %a %a@])" Expr.pp c.expr pp_op c.op Q.pp c.const
 
     let eval (subst:subst) (c:t) : bool =
       let v = Expr.eval subst c.expr in

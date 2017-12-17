@@ -39,12 +39,22 @@ let rand_q : Q.t QC.arbitrary =
 
 type subst = Q.t Spl.Var_map.t
 
+let filter_shrink (f:'a->bool) (a:'a QC.arbitrary) : 'a QC.arbitrary =
+  match a.QC.shrink with
+    | None -> a
+    | Some shr ->
+      let shr' x yield = shr x (fun y -> if f y then yield y) in
+      QC.set_shrink shr' a
+
 module Expr = struct
   include Spl.Expr
 
   let rand n : t QC.arbitrary =
-    QC.map ~rev:to_list of_list @@
-    QC.list_of_size QC.Gen.(0--n) @@ QC.pair rand_q (Var.rand 10)
+    let a =
+      QC.map ~rev:to_list of_list @@
+      QC.list_of_size QC.Gen.(1--n) @@ QC.pair rand_q (Var.rand 10)
+    in
+    filter_shrink (fun e -> not (is_empty e)) a
 end
 
 module Constr = struct
@@ -55,7 +65,7 @@ module Constr = struct
     append
       (Option.map_or ~default:empty
          (fun s -> s c.expr >|= fun expr -> {c with expr})
-         (Expr.rand 0).QC.shrink)
+         (Expr.rand 5).QC.shrink)
       (Option.map_or ~default:empty
          (fun s -> s c.const >|= fun const -> {c with const}) rand_q.QC.shrink)
 
@@ -80,7 +90,7 @@ end
 
 let pp_subst : Spl.subst Format.printer =
   Format.(map Spl.Var_map.to_seq @@
-    seq ~sep:(return ",@ ") @@
+    hvbox @@ seq ~sep:(return ",@ ") @@
     pair ~sep:(return "@ @<1>→ ") Var.pp Q.pp_print
   )
 
