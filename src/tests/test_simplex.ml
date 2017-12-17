@@ -18,7 +18,7 @@ module Var = struct
   let rand n : t QC.arbitrary = QC.make ~print:(Format.to_string pp) @@ QC.Gen.(0--n)
 end
 
-module Spl = Funarith_zarith.Simplex.Make_constr(Var)
+module Spl = Funarith_zarith.Simplex.Make_full(Var)
 
 let rand_n low n : Z.t QC.arbitrary =
   QC.map ~rev:Z.to_int Z.of_int QC.(low -- n)
@@ -90,7 +90,7 @@ end
 
 let pp_subst : Spl.subst Format.printer =
   Format.(map Spl.Var_map.to_seq @@
-    hvbox @@ seq ~sep:(return ",@ ") @@
+    within "{" "}" @@ hvbox @@ seq ~sep:(return ",@ ") @@
     pair ~sep:(return "@ @<1>→ ") Var.pp Q.pp_print
   )
 
@@ -107,7 +107,10 @@ let check_invariants_after_solve =
     let simplex = Spl.create() in
     Spl.add_problem simplex pb;
     ignore (Spl.solve simplex);
-    Spl.check_invariants simplex
+    if Spl.check_invariants simplex then true
+    else (
+      QC.Test.fail_reportf "(@[bad-invariants@ %a@])" Spl.pp_full_state simplex
+    )
   in
   QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants_after_solve" Problem.rand prop
 
@@ -115,12 +118,14 @@ let check_sound =
   let prop pb =
     let simplex = Spl.create() in
     Spl.add_problem simplex pb;
+    let old_simp = Spl.copy simplex in
     begin match Spl.solve simplex with
       | Spl.Solution subst ->
         if Problem.eval subst pb then true
         else (
-          QC.Test.fail_reportf "(bad solution@ :problem %a@ :sol %a@])"
-            Problem.pp pb pp_subst subst
+          QC.Test.fail_reportf
+            "(@[<hv>bad-solution@ :problem %a@ :sol %a@ :simplex-after  %a@ :simplex-before %a@])"
+            Problem.pp pb pp_subst subst Spl.pp_full_state simplex Spl.pp_full_state old_simp
         )
       | Spl.Unsatisfiable _ -> true (* TODO: check *)
     end

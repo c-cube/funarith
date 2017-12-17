@@ -9,10 +9,13 @@
 
 open Containers
 
-module type S = Simplex_intf.S
 module type VAR = Simplex_intf.VAR
+module type VAR_PP = Simplex_intf.VAR_PP
 module type VAR_GEN = Simplex_intf.VAR_GEN
-module type CONSTRAINT = Simplex_intf.CONSTRAINT
+
+module type S = Simplex_intf.S
+module type S_PP = Simplex_intf.S_PP
+module type S_FULL = Simplex_intf.S_FULL
 
 module Vec = CCVector
 
@@ -463,7 +466,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* pivot to exchange [x] and [y] *)
   let pivot (t:t) (x:basic_var) (y:nbasic_var) (a:Q.t) : unit =
-    (* Assignment change *)
+    (* swap values ([x] becomes assigned) *)
     let val_x = value t x in
     t.assign <- t.assign |> M.remove y |> M.add x val_x;
     (* Matrix Pivot operation *)
@@ -798,8 +801,62 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
 end
 
-module Make_constr(Q : Rat.S)(Var : VAR_GEN) = struct
+module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
   include Make(Q)(Var)
+
+  let fmt_head = format_of_string "| %6s || "
+  let fmt_cell = format_of_string "%6s | "
+
+  let pp_erat out e =
+    Format.fprintf out "{@[lower=%a;@,upper=%a@]}"
+      Q.pp (Erat.lower e) Q.pp (Erat.upper e)
+
+  let str_of_var = Format.to_string Var.pp
+  let str_of_erat = Format.to_string pp_erat
+  let str_of_q = Format.to_string Q.pp
+
+  let pp_mat out t =
+    let open Format in
+    fprintf out "@[<v>";
+    (* header *)
+    fprintf out fmt_head "";
+    Vec.iter (fun x -> fprintf out fmt_cell (str_of_var x)) t.nbasic;
+    fprintf out "@,";
+    (* rows *)
+    for i=0 to Mat.n_row t.tab-1 do
+      if i>0 then fprintf out "@,";
+      let v = Vec.get t.basic i in
+      fprintf out fmt_head (str_of_var v);
+      let row = Mat.get_row t.tab i in
+      Vec.iter (fun q -> fprintf out fmt_cell (str_of_q q)) row;
+    done;
+    fprintf out "@]"
+
+  let pp_assign =
+    let open Format in
+    let pp_pair =
+      within "(" ")" @@ hvbox @@ pair ~sep:(return "@ := ") Var.pp pp_erat
+    in
+    map Var_map.to_seq @@ within "(" ")" @@ hvbox @@ seq pp_pair
+
+  let pp_bounds =
+    let open Format in
+    let pp_pairs out (x,(l,u)) =
+      fprintf out "(@[%a =< %a =< %a@])" pp_erat l Var.pp x pp_erat u
+    in
+    map Var_map.to_seq @@ within "(" ")" @@ hvbox @@ seq pp_pairs
+
+  let pp_full_state out (t:t) : unit =
+    let open Format in
+    (* print main matrix *)
+    Format.fprintf out
+      "(@[<hv>simplex@ :n-row %d :n-col %d@ :mat %a@ :assign %a@ :bounds %a@])"
+      (Mat.n_row t.tab) (Mat.n_col t.tab) pp_mat t pp_assign t.assign
+      pp_bounds t.bounds
+end
+
+module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
+  include Make_pp(Q)(Var)
 
   type subst = Q.t Var_map.t
 
@@ -903,10 +960,10 @@ module Make_constr(Q : Rat.S)(Var : VAR_GEN) = struct
     let q = Constr.const c in
     add_eq t (x, Expr.to_list (Constr.expr c));
     begin match c.Constr.op with
-      | Constr.Leq -> add_lower_bound t ~strict:false x q
-      | Constr.Geq -> add_upper_bound t ~strict:false x q
-      | Constr.Lt -> add_lower_bound t ~strict:true x q
-      | Constr.Gt -> add_upper_bound t ~strict:true x q
+      | Constr.Leq -> add_upper_bound t ~strict:false x q
+      | Constr.Geq -> add_lower_bound t ~strict:false x q
+      | Constr.Lt -> add_upper_bound t ~strict:true x q
+      | Constr.Gt -> add_lower_bound t ~strict:true x q
       | Constr.Eq -> add_bounds t ~strict_lower:false ~strict_upper:false (x,q,q)
     end
 

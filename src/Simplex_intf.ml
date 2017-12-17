@@ -17,6 +17,11 @@ module type VAR = sig
   val compare : t -> t -> int
 end
 
+module type VAR_PP = sig
+  include VAR
+  val pp : t CCFormat.printer
+end
+
 module type S = sig
   (** Rational number implementation *)
   module Q : Rat.S
@@ -129,10 +134,14 @@ module type S = sig
   (**/**)
 end
 
-module type VAR_GEN = sig
-  include VAR
+module type S_PP = sig
+  include S
 
-  val pp : t CCFormat.printer
+  val pp_full_state : t CCFormat.printer
+end
+
+module type VAR_GEN = sig
+  include VAR_PP
 
   (** Generate fresh variables on demand *)
   module Fresh : sig
@@ -144,8 +153,8 @@ module type VAR_GEN = sig
   end
 end
 
-module type CONSTRAINT = sig
-  include S
+module type S_FULL = sig
+  include S_PP
 
   type subst = Q.t Var_map.t
 
