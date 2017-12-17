@@ -10,6 +10,8 @@ copyright (c) 2014, guillaume bury
 module type S = Simplex_intf.S
 module type Var = Simplex_intf.Var
 
+module Vec = CCVector
+
 (* Simplex Implementation *)
 module Make(Q : Rat.S)(Var: Var) = struct
 
@@ -41,6 +43,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
     let zero : t = {lower=Q.zero; upper=Q.zero}
 
     let[@inline] make lower upper : t = {lower; upper}
+    let[@inline] lower t = t.lower
+    let[@inline] upper t = t.upper
     let[@inline] mul k e = Q.(make (k * e.lower) (k * e.upper))
     let[@inline] sum e1 e2 = Q.(make (e1.lower + e2.lower) (e1.upper + e2.upper))
     let[@inline] compare e1 e2 = match Q.compare e1.lower e2.lower with
@@ -58,10 +62,44 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   module Var_map = M
 
+  module Mat : sig
+    type 'a t
+
+    val create : unit -> 'a t
+    val init : int -> int -> (int -> int -> 'a) -> 'a t
+    val get : 'a t -> int -> int -> 'a
+    val set : 'a t -> int -> int -> 'a -> unit
+    val get_row : 'a t -> int -> 'a Vec.vector
+    val copy : 'a t -> 'a t
+    val dim1 : _ t -> int
+    val dim2 : _ t -> int
+    val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
+    val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
+    val to_list : 'a t -> 'a list list
+  end = struct
+    type 'a t = 'a Vec.vector Vec.vector
+
+    let[@inline] create() = Vec.create()
+
+    let[@inline] init n m f = Vec.init n (fun i -> Vec.init m (fun j -> f i j))
+
+    let[@inline] get m i j = Vec.get (Vec.get m i) j
+    let[@inline] get_row m i = Vec.get m i
+    let[@inline] set (m:_ t) i j x = Vec.set (Vec.get m i) j x
+    let[@inline] copy m = Vec.map Vec.copy m
+
+    let[@inline] dim1 m = Vec.length m
+    let[@inline] dim2 m = if Vec.is_empty m then 0 else Vec.length (Vec.get m 0)
+
+    let push_row m x = Vec.push m (Vec.make (dim2 m) x)
+    let push_col m x = Vec.iter (fun row -> Vec.push row x) m
+    let to_list m = List.map Vec.to_list (Vec.to_list m)
+  end
+
   type t = {
-    tab : Q.t array array; (* the matrix of coefficients *)
-    basic : basic_var array; (* basic variables *)
-    nbasic : nbasic_var array; (* non basic variables *)
+    tab : Q.t Mat.t; (* the matrix of coefficients *)
+    basic : basic_var Vec.vector; (* basic variables *)
+    nbasic : nbasic_var Vec.vector; (* non basic variables *)
     mutable assign : Erat.t M.t; (* assignments *)
     mutable bounds : (Erat.t * Erat.t) M.t; (* (lower, upper) bounds for variables *)
     mutable idx_basic : int M.t; (* basic var -> its index in [basic] *)
@@ -85,22 +123,10 @@ module Make(Q : Rat.S)(Var: Var) = struct
       done
     done
 
-  let init_matrix line col f =
-    Array.init line (fun i -> Array.init col (fun j -> f i j))
-
-  let copy_array = Array.copy
-
-  let copy_matrix m =
-    if Array.length m = 0 then
-      init_matrix 0 0 (fun _ _ -> Q.zero)
-    else
-      init_matrix (Array.length m) (Array.length m.(0))
-        (fun i j -> m.(i).(j))
-
-  let empty : t = {
-    tab = [| |];
-    basic = [| |];
-    nbasic = [| |];
+  let create () : t = {
+    tab = Mat.create ();
+    basic = Vec.create ();
+    nbasic = Vec.create ();
     assign = M.empty;
     bounds = M.empty;
     idx_basic = M.empty;
@@ -108,9 +134,9 @@ module Make(Q : Rat.S)(Var: Var) = struct
   }
 
   let copy t = {
-    tab = copy_matrix t.tab;
-    basic = copy_array t.basic;
-    nbasic = copy_array t.nbasic;
+    tab = Mat.copy t.tab;
+    basic = Vec.copy t.basic;
+    nbasic = Vec.copy t.nbasic;
     assign = t.assign;
     bounds = t.bounds;
     idx_nbasic = t.idx_nbasic;
@@ -132,19 +158,19 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   (* find the definition of the basic variable [x],
      as a linear combination of non basic variables *)
-  let find_expr_basic t (x:basic_var) : Q.t array =
+  let find_expr_basic t (x:basic_var) : Q.t Vec.vector =
     begin match index_basic t x with
       | -1 -> unexpected "Trying to find an expression for a non-basic variable."
-      | i -> t.tab.(i)
+      | i -> Mat.get_row t.tab i
     end
 
   (* build the expression [y = \sum_i (if x_i=y then 1 else 0)·x_i] *)
-  let find_expr_nbasic t (x:nbasic_var) : Q.t array =
-    Array.init (Array.length t.nbasic)
-      (fun j -> if Var.compare x t.nbasic.(j) = 0 then Q.one else Q.zero)
+  let find_expr_nbasic t (x:nbasic_var) : Q.t Vec.vector =
+    Vec.init (Vec.length t.nbasic)
+      (fun j -> if Var.compare x (Vec.get t.nbasic j) = 0 then Q.one else Q.zero)
 
   (* find expression of [x] *)
-  let find_expr_total (t:t) (x:var) : Q.t array =
+  let find_expr_total (t:t) (x:var) : Q.t Vec.vector =
     if mem_basic t x then
       find_expr_basic t x
     else if mem_nbasic t x then
@@ -157,7 +183,7 @@ module Make(Q : Rat.S)(Var: Var) = struct
   let[@inline] find_coef (t:t) (x:var) (y:var) : Q.t =
     begin match index_basic t x, index_nbasic t y with
       | -1, _ | _, -1 -> assert false
-      | i, j -> t.tab.(i).(j)
+      | i, j -> Mat.get t.tab i j
     end
 
   (* compute value of basic variable.
@@ -167,13 +193,13 @@ module Make(Q : Rat.S)(Var: Var) = struct
     assert (mem_basic t x);
     let res = ref Erat.zero in
     let expr = find_expr_basic t x in
-    for i = 0 to Array.length expr - 1 do
+    for i = 0 to Vec.length expr - 1 do
       let val_nbasic_i =
-        try M.find t.nbasic.(i) t.assign
+        try M.find (Vec.get t.nbasic i) t.assign
         with Not_found ->
           unexpected "Basic variable in expression of a basic variable."
       in
-      res := Erat.sum !res (Erat.mul expr.(i) val_nbasic_i)
+      res := Erat.sum !res (Erat.mul (Vec.get expr i) val_nbasic_i)
     done;
     !res
 
@@ -201,8 +227,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
     else
       true, v
 
-  (* create a new system with additional (non basic) variables *)
-  let add_vars (t:t) (l:var list) : t =
+  (* add nbasic variables *)
+  let add_vars (t:t) (l:var list) : unit =
     (* add new variable to idx and array for nbasic, removing duplicates
        and variables already present *)
     let idx_nbasic, _, l_rev =
@@ -214,68 +240,50 @@ module Make(Q : Rat.S)(Var: Var) = struct
              (* allocate new index for [x] *)
              M.add x offset idx_nbasic, offset+1, x::l_rev
            ))
-        (t.idx_basic, Array.length t.nbasic, [])
+        (t.idx_basic, Vec.length t.nbasic, [])
         l
     in
-    begin match l_rev with
-      | [] -> t
-      | _ ->
-        let a = Array.of_list (List.rev l_rev) in
-        let tab =
-          init_matrix
-            (Array.length t.basic)
-            (Array.length t.nbasic + Array.length a)
-            (fun i j -> if j < Array.length t.nbasic then t.tab.(i).(j) else Q.zero)
-        in
-        {
-          tab;
-          basic = copy_array t.basic; (* FIXME: why copy? *)
-          nbasic = Array.append t.nbasic a;
-          assign = List.fold_left (fun acc y -> M.add y Erat.zero acc) t.assign l;
-          bounds = t.bounds;
-          idx_nbasic;
-          idx_basic = t.idx_basic;
-        }
-    end
+    let l = List.rev l_rev in
+    (* add new columns to the matrix *)
+    List.iter (fun _ -> Mat.push_col t.tab Q.zero) l;
+    Vec.append_list t.nbasic l;
+    t.assign <- List.fold_left (fun acc y -> M.add y Erat.zero acc) t.assign l;
+    t.idx_basic <- idx_nbasic;
+    ()
 
   (* define basic variable [x] by [eq] in [t] *)
-  let add_eq (t:t) (x, eq : basic_var * _ list) : t =
+  let add_eq (t:t) (x, eq : basic_var * _ list) : unit =
     if mem_basic t x || mem_nbasic t x then (
       unexpected "Variable already defined.";
     );
-    let t = add_vars t (List.map snd eq) in
-    let new_eq = Array.make (Array.length t.nbasic) Q.zero in
+    add_vars t (List.map snd eq);
+    (* add new row for defining [x] *)
+    Mat.push_row t.tab Q.zero;
+    let row_i = Mat.dim1 t.tab - 1 in
     List.iter
       (fun (c, x) ->
-         Array.iteri
-           (fun i c' -> new_eq.(i) <- Q.(new_eq.(i) + c * c'))
+         Vec.iteri
+           (fun j c' -> Mat.set t.tab row_i j Q.(Mat.get t.tab row_i j + c * c'))
            (find_expr_total t x))
       eq;
-    { t with
-        tab = Array.append t.tab [| new_eq |];
-        basic = Array.append t.basic [| x |];
-        idx_basic = M.add x (Array.length t.basic) t.idx_basic;
-    }
+    ()
 
   (* add bounds to [x] in [t] *)
-  let add_bound_aux (t:t) (x:var) (low:Erat.t) (upp:Erat.t) : t =
-    let t = add_vars t [x] in
+  let add_bound_aux (t:t) (x:var) (low:Erat.t) (upp:Erat.t) : unit =
+    add_vars t [x];
     let l, u = get_bounds t x in
-    { t with bounds = M.add x (max l low, min u upp) t.bounds }
+    t.bounds <- M.add x (max l low, min u upp) t.bounds
 
-  let add_bounds (t:t) ?strict_lower:(slow=false) ?strict_upper:(supp=false) (x, l, u) : t =
-    let t = copy t in
+  let add_bounds (t:t) ?strict_lower:(slow=false) ?strict_upper:(supp=false) (x, l, u) : unit =
     let e1 = if slow then Q.one else Q.zero in
     let e2 = if supp then Q.neg Q.one else Q.zero in
-    let t = add_bound_aux t x (Erat.make l e1) (Erat.make u e2) in
+    add_bound_aux t x (Erat.make l e1) (Erat.make u e2);
     if mem_nbasic t x then (
       let b, v = is_within_bounds t x in
-      if b then
-        t
-      else
-        { t with assign = M.add x v t.assign }
-    ) else
-      t
+      if not b then (
+        t.assign <- M.add x v t.assign;
+      )
+    )
 
   (* Modifies bounds in place. Do NOT export. *)
   let add_bounds_mut
@@ -306,7 +314,7 @@ module Make(Q : Rat.S)(Var: Var) = struct
 
   (* full assignment *)
   let full_assign (t:t) : (var * Erat.t) Sequence.t =
-    Sequence.append (Sequence.of_array t.nbasic) (Sequence.of_array t.basic)
+    Sequence.append (Vec.to_seq t.nbasic) (Vec.to_seq t.basic)
     |> Sequence.map (fun x -> x, value t x)
 
   let[@inline] min x y = if Q.compare x y < 0 then x else y
@@ -376,11 +384,19 @@ module Make(Q : Rat.S)(Var: Var) = struct
         (Erat.lt v upp && Q.compare a Q.zero < 0)
       )
     in
-    let rec aux l1 l2 = match l1, l2 with
-      | [], [] -> None
-      | y :: tail1, a :: tail2 ->
+    let nbasic_vars = t.nbasic in
+    let expr = find_expr_basic t x in
+    (* find best suitable variable *)
+    let rec aux i =
+      if i = Vec.length nbasic_vars then (
+        assert (i = Vec.length expr);
+        None
+      ) else (
+        let y = Vec.get nbasic_vars i in
+        let a = Vec.get expr i in
         if test y a then (
-          begin match aux tail1 tail2 with
+          (* see if other variables are better suited *)
+          begin match aux (i+1) with
             | None -> Some (y,a)
             | Some (z, _) as res_tail ->
               if Var.compare y z <= 0
@@ -388,15 +404,13 @@ module Make(Q : Rat.S)(Var: Var) = struct
               else res_tail
           end
         ) else (
-          aux tail1 tail2
+          aux (i+1)
         )
-      | _, _ -> unexpected "Wrong list size"
+      )
     in
-    begin match
-        aux (Array.to_list t.nbasic) (Array.to_list (find_expr_basic t x))
-      with
-        | Some res -> res
-        | None ->  raise NoneSuitable
+    begin match aux 0 with
+      | Some res -> res
+      | None ->  raise NoneSuitable
     end
 
   (* pivot to exchange [x] and [y] *)
@@ -407,45 +421,45 @@ module Make(Q : Rat.S)(Var: Var) = struct
     (* Matrix Pivot operation *)
     let kx = index_basic t x in
     let ky = index_nbasic t y in
-    for j = 0 to Array.length t.nbasic - 1 do
-      if Var.compare y t.nbasic.(j) = 0 then (
-        t.tab.(kx).(j) <- Q.(one / a)
+    for j = 0 to Vec.length t.nbasic - 1 do
+      if Var.compare y (Vec.get t.nbasic j) = 0 then (
+        Mat.set t.tab kx j Q.(one / a)
       ) else (
-        t.tab.(kx).(j) <- Q.(neg (t.tab.(kx).(j) / a))
+        Mat.set t.tab kx j Q.(neg (Mat.get t.tab kx j) / a)
       )
     done;
-    for i = 0 to Array.length t.basic - 1 do
+    for i = 0 to Vec.length t.basic - 1 do
       if i <> kx then (
-        let c = t.tab.(i).(ky) in
-        t.tab.(i).(ky) <- Q.zero;
-        for j = 0 to Array.length t.nbasic - 1 do
-          t.tab.(i).(j) <- Q.(t.tab.(i).(j) + c * t.tab.(kx).(j))
+        let c = Mat.get t.tab i ky in
+        Mat.set t.tab i ky Q.zero;
+        for j = 0 to Vec.length t.nbasic - 1 do
+          Mat.set t.tab i j Q.(Mat.get t.tab i j + c * Mat.get t.tab kx j)
         done
       )
     done;
     (* Switch x and y in basic and nbasic vars *)
-    t.basic.(kx) <- y;
-    t.nbasic.(ky) <- x;
+    Vec.set t.basic kx y;
+    Vec.set t.nbasic ky x;
     t.idx_basic <- t.idx_basic |> M.remove x |> M.add y kx;
     t.idx_nbasic <- t.idx_nbasic |> M.remove y |> M.add x ky;
     ()
 
   (* find minimum element of [arr] (wrt [cmp]) that satisfies predicate [f] *)
-  let find_min_filter ~cmp (f:'a -> bool) (arr:'a array) : 'a option =
+  let find_min_filter ~cmp (f:'a -> bool) (arr:('a,_) Vec.t) : 'a option =
     (* find the first element that satisfies [f] *)
     let rec aux_find_first i =
-      if i = Array.length arr then None
+      if i = Vec.length arr then None
       else (
-        let x = arr.(i) in
+        let x = Vec.get arr i in
         if f x
         then aux_compare_with x (i+1)
         else aux_find_first (i+1)
       )
     (* find if any element of [l] satisfies [f] and is smaller than [x] *)
     and aux_compare_with x i =
-      if i = Array.length arr then Some x
+      if i = Vec.length arr then Some x
       else (
-        let y = arr.(i) in
+        let y = Vec.get arr i in
         let best = if f y && cmp y x < 0 then y else x in
         aux_compare_with best (i+1)
       )
@@ -492,8 +506,8 @@ module Make(Q : Rat.S)(Var: Var) = struct
       | Unsat x ->
         let cert_expr =
           List.combine
-            (Array.to_list (find_expr_basic t x))
-            (Array.to_list t.nbasic)
+            (Vec.to_list (find_expr_basic t x))
+            (Vec.to_list t.nbasic)
         in
         Unsatisfiable { cert_var=x; cert_expr; }
       | AbsurdBounds x ->
@@ -503,14 +517,17 @@ module Make(Q : Rat.S)(Var: Var) = struct
   (** External access functions *)
 
   let get_tab t =
-    Array.to_list t.nbasic,
-    Array.to_list t.basic,
-    List.map Array.to_list (Array.to_list t.tab)
+    Vec.to_list t.nbasic,
+    Vec.to_list t.basic,
+    Mat.to_list t.tab
 
-  let get_assign t = List.map (fun (x, v) -> x,v.lower) (M.bindings t.assign)
+  let get_assign_map t = M.map Erat.lower t.assign
+  let get_assign t = List.rev_map (fun (x, v) -> x,v.lower) (M.bindings t.assign)
+
   let get_bounds t x =
     let l, u = get_bounds t x in
     l.lower, u.lower
+
   let get_all_bounds t =
     List.map
       (fun (x,(l,u)) -> (x, (l.lower, u.lower)))
