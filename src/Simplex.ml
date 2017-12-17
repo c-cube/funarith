@@ -812,8 +812,11 @@ module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
   let fmt_cell = format_of_string "%6s | "
 
   let pp_erat out e =
-    Format.fprintf out "{@[base=%a;@,eps_factor=%a@]}"
-      Q.pp (Erat.base e) Q.pp (Erat.eps_factor e)
+    if Q.equal Q.zero (Erat.eps_factor e)
+    then Q.pp out (Erat.base e)
+    else
+      Format.fprintf out "(@[<h>%a + @<1>ε * %a@])"
+        Q.pp (Erat.base e) Q.pp (Erat.eps_factor e)
 
   let str_of_var = Format.to_string Var.pp
   let str_of_erat = Format.to_string pp_erat
