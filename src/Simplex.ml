@@ -39,23 +39,23 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   type nbasic_var = var
 
   type erat = {
-    lower: Q.t;
-    upper: Q.t;
+    base: Q.t; (* reference number *)
+    eps_factor: Q.t; (* coefficient for epsilon, the infinitesimal *)
   }
 
   (** Epsilon-rationals, used for strict bounds *)
   module Erat = struct
     type t = erat
 
-    let zero : t = {lower=Q.zero; upper=Q.zero}
+    let zero : t = {base=Q.zero; eps_factor=Q.zero}
 
-    let[@inline] make lower upper : t = {lower; upper}
-    let[@inline] lower t = t.lower
-    let[@inline] upper t = t.upper
-    let[@inline] mul k e = Q.(make (k * e.lower) (k * e.upper))
-    let[@inline] sum e1 e2 = Q.(make (e1.lower + e2.lower) (e1.upper + e2.upper))
-    let[@inline] compare e1 e2 = match Q.compare e1.lower e2.lower with
-      | 0 -> Q.compare e1.upper e2.upper
+    let[@inline] make base eps_factor : t = {base; eps_factor}
+    let[@inline] base t = t.base
+    let[@inline] eps_factor t = t.eps_factor
+    let[@inline] mul k e = Q.(make (k * e.base) (k * e.eps_factor))
+    let[@inline] sum e1 e2 = Q.(make (e1.base + e2.base) (e1.eps_factor + e2.eps_factor))
+    let[@inline] compare e1 e2 = match Q.compare e1.base e2.base with
+      | 0 -> Q.compare e1.eps_factor e2.eps_factor
       | x -> x
 
     let lt a b = compare a b < 0
@@ -64,7 +64,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     let[@inline] min x y = if compare x y <= 0 then x else y
     let[@inline] max x y = if compare x y >= 0 then x else y
 
-    let[@inline] evaluate (epsilon:Q.t) (e:t) : Q.t = Q.(e.lower + epsilon * e.upper)
+    let[@inline] evaluate (epsilon:Q.t) (e:t) : Q.t = Q.(e.base + epsilon * e.eps_factor)
   end
 
   module Var_map = M
@@ -377,8 +377,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let solve_epsilon (t:t) : Q.t =
     let emin = ref Q.minus_inf in
     let emax = ref Q.inf in
-    M.iter (fun x ({lower=low;upper=e1}, {lower=upp;upper=e2}) ->
-      let {lower=v; upper=e} = value t x in
+    M.iter (fun x ({base=low;eps_factor=e1}, {base=upp;eps_factor=e2}) ->
+      let {base=v; eps_factor=e} = value t x in
       if Q.(e - e1 > zero) then
         emin := max !emin Q.((low - v) / (e - e1))
       else if Q.(e - e1 < zero) then (* shoudln't happen as *) (* TODO: what? *)
@@ -517,10 +517,13 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     in
     aux_find_first 0
 
+  (* check bounds *)
+  let check_bounds (t:t) : unit =
+    M.iter (fun x (l, u) -> if Erat.gt l u then raise (AbsurdBounds x)) t.bounds
+
   (* actual solving algorithm *)
   let solve_aux (t:t) : unit =
-    (* check bounds *)
-    M.iter (fun x (l, u) -> if Erat.gt l u then raise (AbsurdBounds x)) t.bounds;
+    check_bounds t;
     (* select the smallest basic variable that is not satisfied in the current
        assignment. *)
     let rec aux_select_basic_var () =
@@ -546,7 +549,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
         | exception NoneSuitable ->
           raise (Unsat x)
     in
-    aux_select_basic_var ()
+    aux_select_basic_var ();
+    ()
 
   (* main method for the user to call *)
   let solve (t:t) : res =
@@ -572,16 +576,16 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     Vec.to_list t.basic,
     Mat.to_list t.tab
 
-  let get_assign_map t = M.map Erat.lower t.assign
-  let get_assign t = List.rev_map (fun (x, v) -> x,v.lower) (M.bindings t.assign)
+  let get_assign_map t = M.map Erat.base t.assign
+  let get_assign t = List.rev_map (fun (x, v) -> x,v.base) (M.bindings t.assign)
 
   let get_bounds t x =
     let l, u = get_bounds t x in
-    l.lower, u.lower
+    l.base, u.base
 
   let get_all_bounds t =
     List.map
-      (fun (x,(l,u)) -> (x, (l.lower, u.lower)))
+      (fun (x,(l,u)) -> (x, (l.base, u.base)))
       (M.bindings t.bounds)
 
 (*
@@ -808,8 +812,8 @@ module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
   let fmt_cell = format_of_string "%6s | "
 
   let pp_erat out e =
-    Format.fprintf out "{@[lower=%a;@,upper=%a@]}"
-      Q.pp (Erat.lower e) Q.pp (Erat.upper e)
+    Format.fprintf out "{@[base=%a;@,eps_factor=%a@]}"
+      Q.pp (Erat.base e) Q.pp (Erat.eps_factor e)
 
   let str_of_var = Format.to_string Var.pp
   let str_of_erat = Format.to_string pp_erat
