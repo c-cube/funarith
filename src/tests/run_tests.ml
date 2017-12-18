@@ -31,6 +31,7 @@ let suite =
 let props =
   List.flatten
     [ Test_prime.props;
+      Test_simplex.props;
     ]
 
 let () =
