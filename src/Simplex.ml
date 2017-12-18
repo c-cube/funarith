@@ -387,39 +387,24 @@ module Make(Q : Rat.S)(Var: VAR) = struct
      all the intervals of [t]. This rational will be the actual value of [ε].
   *)
   let solve_epsilon (t:t) : Q.t =
-    let emin, emax =
+    let emax =
       M.fold
-        (fun x ({base=low;eps_factor=e_low}, {base=upp;eps_factor=e_upp}) (emin, emax) ->
+        (fun x ({base=low;eps_factor=e_low}, {base=upp;eps_factor=e_upp}) emax ->
            let {base=v; eps_factor=e_v} = value t x in
            (* lower bound *)
-           let emin, emax =
-             if Q.compare Q.minus_inf low > 0
-             then match Q.compare e_v e_low with
-               | n when n>0 -> max emin Q.((low - v) / (e_v - e_low)), emax
-               | n when n<0 -> emin, min emax Q.((low - v) / (e_v - e_low))
-               | 0 when Q.compare e_v Q.zero <> 0 -> max emin Q.one, emax
-               | _ -> emin, emax
-             else emin, emax
+           let emax =
+             if Q.compare Q.minus_inf low > 0 && Q.compare e_v e_low < 0
+             then min emax Q.((low - v) / (e_v - e_low))
+             else emax
            in
            (* upper bound *)
-           if Q.compare upp Q.inf < 0
-           then match Q.compare e_v e_upp with
-             | n when n>0 -> emin, min emax Q.((upp - v) / (e_v - e_upp))
-             | n when n<0 -> max emin Q.((upp - v) / (e_v - e_upp)), emax
-             | 0 when Q.compare e_v Q.zero <> 0 -> max emin Q.one, emax
-             | _ -> emin, emax
-           else emin, emax)
+           if Q.compare upp Q.inf < 0 && Q.compare e_v e_upp > 0
+           then min emax Q.((upp - v) / (e_v - e_upp))
+           else emax)
         t.bounds
-        (Q.minus_inf, Q.inf)
+        Q.inf
     in
-    if Q.equal Q.minus_inf emin && Q.equal Q.inf emax then
-      Q.zero
-    else if Q.compare emin Q.zero > 0 then
-      min emin emax
-    else if Q.compare emax Q.one >= 0 then
-      Q.one
-    else
-      emax
+    if Q.compare emax Q.one >= 0 then Q.one else emax
 
   let get_full_assign_seq (t:t) : _ Sequence.t =
     let e = solve_epsilon t in
