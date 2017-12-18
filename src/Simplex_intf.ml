@@ -85,10 +85,13 @@ module type S = sig
       *)
   val solve : t -> res
 
-  val check_cert : t -> cert -> bool
+  val check_cert :
+    t ->
+    cert ->
+    [`Ok | `Bad_bounds of string * string | `Diff_not_0 of Q.t Var_map.t]
   (** checks that the certificat indeed yields to a contradiction
       in the current state of the simplex.
-      @return true if the certificate is valid. *)
+      @return [`Ok] if the certificate is valid. *)
 
   (* TODO: push/pop *)
 

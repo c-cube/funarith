@@ -114,7 +114,18 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     let[@inline] max x y = if compare x y >= 0 then x else y
 
     let[@inline] evaluate (epsilon:Q.t) (e:t) : Q.t = Q.(e.base + epsilon * e.eps_factor)
+
+    let pp out e =
+      if Q.equal Q.zero (eps_factor e)
+      then Q.pp out (base e)
+      else
+        Format.fprintf out "(@[<h>%a + @<1>ε * %a@])"
+          Q.pp (base e) Q.pp (eps_factor e)
   end
+
+  let str_of_var = Format.to_string Var.pp
+  let str_of_erat = Format.to_string Erat.pp
+  let str_of_q = Format.to_string Q.pp
 
   module Var_map = M
 
@@ -571,36 +582,41 @@ module Make(Q : Rat.S)(Var: VAR) = struct
         expr_x;
       !m
 
-  let check_cert (t:t) (c:cert) : bool =
+  (* maybe invert bounds, if [c < 0] *)
+  let scale_bounds c (l,u) : erat * erat =
+    match Q.compare c Q.zero with
+      | 0 -> Erat.zero, Erat.zero
+      | n when n<0 -> Erat.mul c u, Erat.mul c l
+      | _ -> Erat.mul c l, Erat.mul c u
+
+  let check_cert (t:t) (c:cert) =
     let x = c.cert_var in
     let low_x, up_x = get_bounds t x in
     begin match c.cert_expr with
       | [] ->
-        Erat.compare low_x up_x > 0
-      | (c1,y1) :: tail ->
+        if Erat.compare low_x up_x > 0 then `Ok
+        else `Bad_bounds (str_of_erat low_x, str_of_erat up_x)
+      | expr ->
         let e0 = deref_var_ t x (Q.neg Q.one) M.empty in
         (* compute bounds for the expression [c.cert_expr],
            and also compute [c.cert_expr - x] to check if it's 0] *)
-        let scale_bounds c (l,u) =
-          (* maybe invert bounds, if [c < 0] *)
-          if Q.compare c Q.zero < 0
-          then Erat.mul c u, Erat.mul c l
-          else Erat.mul c l, Erat.mul c u
-        in
-        let ly, uy = scale_bounds c1 (get_bounds t y1) in
         let low, up, expr_minus_x =
           List.fold_left
             (fun (l,u,expr_minus_x) (c, y) ->
                let ly, uy = scale_bounds c (get_bounds t y) in
+               assert (Erat.compare ly uy <= 0);
                let expr_minus_x = deref_var_ t y c expr_minus_x in
                Erat.sum l ly, Erat.sum u uy, expr_minus_x)
-              (ly, uy, deref_var_ t y1 c1 e0)
-              tail
+              (Erat.zero, Erat.zero, e0)
+              expr
         in
         (* check that the expanded expression is [x], and that
            one of the bounds on [x] is incompatible with bounds of [c.cert_expr] *)
-        M.is_empty expr_minus_x &&
-        (Erat.compare low_x up > 0 || Erat.compare up_x low < 0)
+        if M.is_empty expr_minus_x then (
+          if Erat.compare low_x up > 0 || Erat.compare up_x low < 0
+          then `Ok
+          else `Bad_bounds (str_of_erat low, str_of_erat up)
+        ) else `Diff_not_0 expr_minus_x
     end
 
   (** External access functions *)
@@ -629,13 +645,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let fmt_head = format_of_string "|%*s|| "
   let fmt_cell = format_of_string "%*s| "
 
-  let pp_erat out e =
-    if Q.equal Q.zero (Erat.eps_factor e)
-    then Q.pp out (Erat.base e)
-    else
-      Format.fprintf out "(@[<h>%a + @<1>ε * %a@])"
-        Q.pp (Erat.base e) Q.pp (Erat.eps_factor e)
-
   let pp_cert out (c:cert) = match c.cert_expr with
     | [] -> Format.fprintf out "(@[inconsistent-bounds %a@])" Var.pp c.cert_var
     | _ ->
@@ -644,10 +653,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
         Var.pp c.cert_var
         Format.(within "[" "]" @@ hvbox @@ list ~sep:(return "@ + ") pp_pair)
         c.cert_expr
-
-  let str_of_var = Format.to_string Var.pp
-  let str_of_erat = Format.to_string pp_erat
-  let str_of_q = Format.to_string Q.pp
 
   let pp_mat out t =
     let open Format in
@@ -669,14 +674,14 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let pp_assign =
     let open Format in
     let pp_pair =
-      within "(" ")" @@ hvbox @@ pair ~sep:(return "@ := ") Var.pp pp_erat
+      within "(" ")" @@ hvbox @@ pair ~sep:(return "@ := ") Var.pp Erat.pp
     in
     map Var_map.to_seq @@ within "(" ")" @@ hvbox @@ seq pp_pair
 
   let pp_bounds =
     let open Format in
     let pp_pairs out (x,(l,u)) =
-      fprintf out "(@[%a =< %a =< %a@])" pp_erat l Var.pp x pp_erat u
+      fprintf out "(@[%a =< %a =< %a@])" Erat.pp l Var.pp x Erat.pp u
     in
     map Var_map.to_seq @@ within "(" ")" @@ hvbox @@ seq pp_pairs
 
