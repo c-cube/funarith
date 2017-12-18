@@ -66,7 +66,7 @@ module Make(Z : Int.S) = struct
 
     (* previous state: compute>0, so we need to decrease variable(s)
        in [X_j,X_{j+1},…] with positive coeffs *)
-    let rec go_down e sol j k : unit =
+    let go_down e sol j k : unit =
       begin match Z.sign (compute e sol) with
         | 0 -> k sol
         | n when n<0 -> () (* too low *)

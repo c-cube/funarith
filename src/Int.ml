@@ -27,5 +27,4 @@ module Default : S with type t = int = struct
   let minus_one = -1
   let one = 1
   let zero = 0
-  let pp_print = Format.pp_print_int
 end

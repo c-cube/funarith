@@ -93,45 +93,7 @@ module type S = sig
       in the current state of the simplex.
       @return [`Ok] if the certificate is valid. *)
 
-  (* TODO: push/pop *)
-
-  (** {3 Access functions} *)
-  (* TODO: add new access functions ? *)
-
-  (** [get_tab s] returns the current table of [s] as a triple [(l, l', tab)]
-      where [l] is the list of the non-basic variables, [l'] the list of basic
-      variables and [tab] the list of the rows of the tableaux in the same order
-      as [l] and [l']. *)
-  val get_tab : t -> var list * var list * Q.t list list
-
-  (** [get_assign s] returns the current (partial) assignment of the variables in
-      [s] as a list of bindings.  Only non-basic variables (as given by [get_tab])
-      should appear in this assignent. As such, and according to simplex
-      invariants, all variables in the assignment returned should satisfy their
-      bounds. *)
-  val get_assign : t -> (var * Q.t) list
-
-  val get_assign_map : t -> Q.t Var_map.t
-  (** Same as {!get_assign} but with a map *)
-
-  (* [get_full_assign s] returns the current values of all the variables present
-     in the system.  Notice that it doesn't mean the assignment returned
-     satisfies all bounds.*)
-  val get_full_assign : t -> Q.t Var_map.t
-
-  val get_full_assign_l : t -> (var * Q.t) list
-
-  (** [get_bounds s x] returns the pair [(low, upp)] of the current bounds for
-      the variable [x].
-      Notice that it is possible that [low] is strictly greater than [upp]. *)
-  val get_bounds : t -> var -> Q.t * Q.t
-
-  (** [get_all_bounds s] returns the list of all the explicit bounds of [s]. Any
-      variable not present in the return value is assumed to have no bounds
-      (i.e lower bound [Q.minus_inf] and upper bound [Q.inf]). *)
-  val get_all_bounds : t -> (var * (Q.t * Q.t)) list
-
-  (* TODO: proof checker for unsat certificates *)
+  (* TODO: push/pop? at least on bounds *)
 
   val pp_cert : cert CCFormat.printer
 

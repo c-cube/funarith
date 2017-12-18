@@ -21,7 +21,6 @@ module Matrix : sig
   type 'a t
 
   val create : unit -> 'a t
-  val init : int -> int -> (int -> int -> 'a) -> 'a t
   val get : 'a t -> int -> int -> 'a
   val set : 'a t -> int -> int -> 'a -> unit
   val get_row : 'a t -> int -> 'a Vec.vector
@@ -30,7 +29,6 @@ module Matrix : sig
   val n_col : _ t -> int
   val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
   val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
-  val to_list : 'a t -> 'a list list
 
   (**/**)
   val check_invariants : _ t -> bool
@@ -42,11 +40,6 @@ end = struct
   }
 
   let[@inline] create() : _ = {tab=Vec.create(); n_col=0}
-
-  let[@inline] init n m f = {
-    tab=Vec.init n (fun i -> Vec.init m (fun j -> f i j));
-    n_col=m;
-  }
 
   let[@inline] get m i j = Vec.get (Vec.get m.tab i) j
   let[@inline] get_row m i = Vec.get m.tab i
@@ -60,7 +53,6 @@ end = struct
   let push_col m x =
     m.n_col <- m.n_col + 1;
     Vec.iter (fun row -> Vec.push row x) m.tab
-  let to_list m = List.map Vec.to_list (Vec.to_list m.tab)
 
   let check_invariants m = Vec.for_all (fun r -> Vec.length r = n_col m) m.tab
 end
@@ -69,7 +61,8 @@ end
 open Int.Infix
 
 (* Simplex Implementation *)
-module Make(Q : Rat.S)(Var: VAR) = struct
+module Make(Q : Rat.S)(Var: VAR)
+  : S with type var = Var.t and module Q = Q = struct
 
   module Q = Q
   module M = CCMap.Make(Var)
@@ -148,14 +141,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     | Solution of Q.t Var_map.t
     | Unsatisfiable of cert
 
-  (* Base manipulation functions *)
-  let matrix_map f m =
-    for i = 0 to Array.length m - 1 do
-      for j = 0 to Array.length m.(0) - 1 do
-        m.(i).(j) <- f i j m.(i).(j)
-      done
-    done
-
   let create () : t = {
     tab = Matrix.create ();
     basic = Vec.create ();
@@ -200,8 +185,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     Vec.for_all (fun v -> not (Var_map.mem v t.assign)) t.basic &&
     true
 
-  let[@inline] empty_expr n = Array.make n Q.zero
-
   (* find the definition of the basic variable [x],
      as a linear combination of non basic variables *)
   let find_expr_basic_opt t (x:var) : Q.t Vec.vector option =
@@ -230,14 +213,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
       find_expr_nbasic t x
     else
       unexpected "Unknown variable"
-
-  (* find coefficient of nbasic variable [y] in the definition of
-     basic variable [x] *)
-  let find_coef (t:t) (x:basic_var) (y:nbasic_var) : Q.t =
-    begin match index_basic t x, index_nbasic t y with
-      | -1, _ | _, -1 -> assert false
-      | i, j -> Matrix.get t.tab i j
-    end
 
   (* compute value of basic variable.
      It can be computed by using [x]'s definition
@@ -361,7 +336,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     |> Sequence.map (fun x -> x, value t x)
 
   let[@inline] min x y = if Q.compare x y < 0 then x else y
-  let[@inline] max x y = if Q.compare x y < 0 then y else x
 
   (* Find an epsilon that is small enough for finding a solution, yet
      it must be positive.
@@ -400,8 +374,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     |> Sequence.map (fun (x,v) -> x, f v)
 
   let get_full_assign t : Q.t Var_map.t = Var_map.of_seq (get_full_assign_seq t)
-
-  let get_full_assign_l t : _ list = get_full_assign_seq t |> Sequence.to_rev_list
 
   (* Find nbasic variable suitable for pivoting with [x].
      A nbasic variable [y] is suitable if it "goes into the right direction"
@@ -619,25 +591,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
         ) else `Diff_not_0 expr_minus_x
     end
 
-  (** External access functions *)
-
-  let get_tab t =
-    Vec.to_list t.nbasic,
-    Vec.to_list t.basic,
-    Matrix.to_list t.tab
-
-  let get_assign_map t = M.map Erat.base t.assign
-  let get_assign t = List.rev_map (fun (x, v) -> x,v.base) (M.bindings t.assign)
-
-  let get_bounds t x =
-    let l, u = get_bounds t x in
-    l.base, u.base
-
-  let get_all_bounds t =
-    List.map
-      (fun (x,(l,u)) -> (x, (l.base, u.base)))
-      (M.bindings t.bounds)
-
   (* printer *)
 
   let matrix_pp_width = ref 8
@@ -686,7 +639,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     map Var_map.to_seq @@ within "(" ")" @@ hvbox @@ seq pp_pairs
 
   let pp_full_state out (t:t) : unit =
-    let open Format in
     (* print main matrix *)
     Format.fprintf out
       "(@[<hv>simplex@ :n-row %d :n-col %d@ :mat %a@ :assign %a@ :bounds %a@])"
@@ -711,9 +663,9 @@ module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
     let singleton1 x = Var_map.singleton x Q.one
 
     let add c x e =
-      let c' = M.get_or ~default:Q.zero x e in
+      let c' = Var_map.get_or ~default:Q.zero x e in
       let c' = Q.(c + c') in
-      if Q.equal Q.zero c' then M.remove x e else M.add x c' e
+      if Q.equal Q.zero c' then Var_map.remove x e else Var_map.add x c' e
 
     let is_empty = Var_map.is_empty
 
@@ -803,7 +755,7 @@ module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
 
   (* add a constraint *)
   let add_constr (t:t) (c:Constr.t) : unit =
-    let (x:basic_var) = Var.Fresh.fresh fresh_var in
+    let (x:var) = Var.Fresh.fresh fresh_var in
     let q = Constr.const c in
     add_eq t (x, Expr.to_list (Constr.expr c));
     begin match c.Constr.op with
