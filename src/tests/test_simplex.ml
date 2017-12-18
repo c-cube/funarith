@@ -86,8 +86,9 @@ end
 module Problem = struct
   include Spl.Problem
 
-  let rand : t QC.arbitrary =
-    QC.list_of_size QC.Gen.(3 -- 20) @@ Constr.rand 10
+  let rand ?(min=3) n : t QC.arbitrary =
+    let n = max min (max n 6) in
+    QC.list_of_size QC.Gen.(min -- n) @@ Constr.rand 10
 
 end
 
@@ -103,7 +104,7 @@ let check_invariants =
     Spl.add_problem simplex pb;
     Spl.check_invariants simplex
   in
-  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants" Problem.rand prop
+  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants" (Problem.rand 20) prop
 
 let check_invariants_after_solve =
   let prop pb =
@@ -115,7 +116,7 @@ let check_invariants_after_solve =
       QC.Test.fail_reportf "(@[bad-invariants@ %a@])" Spl.pp_full_state simplex
     )
   in
-  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants_after_solve" Problem.rand prop
+  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_invariants_after_solve" (Problem.rand 20) prop
 
 let check_sound =
   let prop pb =
@@ -133,9 +134,20 @@ let check_sound =
       | Spl.Unsatisfiable _ -> true (* TODO: check *)
     end
   in
-  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_sound" Problem.rand prop
+  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_sound" (Problem.rand 20) prop
+
+let check_scalable =
+  let prop pb =
+    let simplex = Spl.create() in
+    Spl.add_problem simplex pb;
+    ignore (Spl.solve simplex);
+    true
+  in
+  QC.Test.make ~long_factor:2 ~count:20 ~name:"simplex_scalable" (Problem.rand ~min:100 100) prop
+
 
 let props = [
   check_invariants;
   check_sound;
+  check_scalable;
 ]
