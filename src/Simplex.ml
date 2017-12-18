@@ -393,7 +393,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
            let {base=v; eps_factor=e_v} = value t x in
            (* lower bound *)
            let emax =
-             if Q.compare Q.minus_inf low > 0 && Q.compare e_v e_low < 0
+             if Q.compare low Q.minus_inf > 0 && Q.compare e_v e_low < 0
              then min emax Q.((low - v) / (e_v - e_low))
              else emax
            in
