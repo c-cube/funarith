@@ -51,7 +51,9 @@ module Expr = struct
   include Spl.Expr
 
   let rand n : t QC.arbitrary =
+    (* generate non-empty expressions *)
     let a =
+      QC.map_same_type (fun e -> if is_empty e then singleton1 0 else e) @@
       QC.map ~rev:to_list of_list @@
       QC.list_of_size QC.Gen.(1--n) @@ QC.pair rand_q (Var.rand 10)
     in
