@@ -595,6 +595,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
       (fun (x,(l,u)) -> (x, (l.base, u.base)))
       (M.bindings t.bounds)
 
+  (* printer *)
+
   let fmt_head = format_of_string "| %6s || "
   let fmt_cell = format_of_string "%6s | "
 

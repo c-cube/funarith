@@ -77,14 +77,12 @@ module type S = sig
 
   (** {3 Simplex solving} *)
 
-  (** [ksolve s] solves the system [s] and returns a solution, if one exists.
-      This function may change the internal representation of the system to that
-      of an equivalent one
-      (permutation of basic and non basic variables and pivot operation on the tableaux).
-      @param debug An optional debug option can be given, and will be applied to
-      all systems encountered while solving the system, including the initial and
-      final states of the system. Can be used for printing intermediate states of
-      the system. *)
+  (** [solve s] solves the system [s] and returns a solution, if one exists.
+      This function may change the internal representation of the system to
+      that of an equivalent one
+      (permutation of basic and non basic variables and pivot operation
+      on the tableaux).
+      *)
   val solve : t -> res
 
   (* TODO: push/pop *)
