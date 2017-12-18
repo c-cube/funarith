@@ -67,10 +67,10 @@ module type S = sig
   (** [add_bounds (x, lower, upper)] adds to [s]
       the bounds [lower] and [upper] for the given variable [x].
       If the bound is loose on one side
-      (no upper bounds for instance), the values [Zarith.Q.inf] and
-      [Zarith.Q.minus_inf] can be used. By default, in a system, all variables
-      have no bounds, i.e have lower bound [Zarith.Q.minus_inf] and upper bound
-      [Zarith.Q.inf].
+      (no upper bounds for instance), the values [Q.inf] and
+      [Q.minus_inf] can be used. By default, in a system, all variables
+      have no bounds, i.e have lower bound [Q.minus_inf] and upper bound
+      [Q.inf].
       Optional parameters allow to make the the bounds strict. Defaults to false,
       so that bounds are large by default. *)
   val add_bounds : t -> ?strict_lower:bool -> ?strict_upper:bool -> var * Q.t * Q.t -> unit
@@ -126,7 +126,7 @@ module type S = sig
 
   (** [get_all_bounds s] returns the list of all the explicit bounds of [s]. Any
       variable not present in the return value is assumed to have no bounds
-      (i.e lower bound [Zarith.Q.minus_inf] and upper bound [Zarith.Q.inf]). *)
+      (i.e lower bound [Q.minus_inf] and upper bound [Q.inf]). *)
   val get_all_bounds : t -> (var * (Q.t * Q.t)) list
 
   (* TODO: proof checker for unsat certificates *)
@@ -166,6 +166,7 @@ module type S_FULL = sig
     val empty : t
     val singleton : Q.t -> var -> t
     val singleton1 : var -> t
+    val add : Q.t -> var -> t -> t
     module Infix : sig
       val (+) : t -> t -> t
       val (-) : t -> t -> t

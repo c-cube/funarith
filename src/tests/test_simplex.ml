@@ -39,6 +39,7 @@ let rand_q : Q.t QC.arbitrary =
 
 type subst = Q.t Spl.Var_map.t
 
+(* NOTE: should arrive in qcheck at some point *)
 let filter_shrink (f:'a->bool) (a:'a QC.arbitrary) : 'a QC.arbitrary =
   match a.QC.shrink with
     | None -> a

@@ -67,6 +67,8 @@ end = struct
   let check_invariants m = Vec.for_all (fun r -> Vec.length r = n_col m) m.tab
 end
 
+(* use non-polymorphic comparison ops *)
+open Int.Infix
 
 (* Simplex Implementation *)
 module Make(Q : Rat.S)(Var: VAR) = struct
@@ -165,13 +167,15 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     idx_basic = t.idx_basic;
   }
 
-  let index_basic (t:t) (x:basic_var) : int = match M.find x t.idx_basic with
-    | n -> n
-    | exception Not_found -> -1
+  let index_basic (t:t) (x:basic_var) : int =
+    match M.find x t.idx_basic with
+      | n -> n
+      | exception Not_found -> -1
 
-  let index_nbasic (t:t) (x:nbasic_var) : int = match M.find x t.idx_nbasic with
-    | n -> n
-    | exception Not_found -> -1
+  let index_nbasic (t:t) (x:nbasic_var) : int =
+    match M.find x t.idx_nbasic with
+      | n -> n
+      | exception Not_found -> -1
 
   let[@inline] mem_basic (t:t) (x:var) : bool = M.mem x t.idx_basic
   let[@inline] mem_nbasic (t:t) (x:var) : bool = M.mem x t.idx_nbasic
@@ -215,7 +219,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* find coefficient of nbasic variable [y] in the definition of
      basic variable [x] *)
-  let find_coef (t:t) (x:var) (y:var) : Q.t =
+  let find_coef (t:t) (x:basic_var) (y:nbasic_var) : Q.t =
     begin match index_basic t x, index_nbasic t y with
       | -1, _ | _, -1 -> assert false
       | i, j -> Matrix.get t.tab i j
@@ -871,9 +875,18 @@ module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
   module Expr = struct
     type t = Q.t Var_map.t
 
-    let singleton c x = Var_map.singleton x c
-    let singleton1 x = Var_map.singleton x Q.one
     let empty = Var_map.empty
+
+    let singleton c x =
+      if Q.compare c Q.zero <> 0 then Var_map.singleton x c else empty
+
+    let singleton1 x = Var_map.singleton x Q.one
+
+    let add c x e =
+      let c' = M.get_or ~default:Q.zero x e in
+      let c' = Q.(c + c') in
+      if Q.equal Q.zero c' then M.remove x e else M.add x c' e
+
     let is_empty = Var_map.is_empty
 
     let[@inline] map2 ~f a b =
@@ -900,9 +913,7 @@ module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
 
     include Infix
 
-    let of_list l =
-      Var_map.of_list (List.rev_map Pair.swap l)
-      |> Var_map.filter (fun _ q -> not (Q.equal Q.zero q))
+    let of_list l = List.fold_left (fun e (c,x) -> add c x e) empty l
     let to_list e = Var_map.bindings e |> List.rev_map Pair.swap
 
     let pp_pair = Format.(pair ~sep:(return "@ * ") Q.pp Var.pp)
