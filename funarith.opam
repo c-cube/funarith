@@ -8,7 +8,7 @@ build: [
   [make "build"]
 ]
 install: [
-  [make "install"]
+  ["jbuilder" "install"]
 ]
 build-test: [
   [make "test"]
