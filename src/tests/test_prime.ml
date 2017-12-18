@@ -30,7 +30,7 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
 
   let check_primes_leq_sound =
     let prop n = Pr.primes_leq ?cache n |> Sequence.for_all Pr.is_prime in
-    Q.Test.make ~count:3 ~name:("primes_leq_sound"^suffix) (rand_n 2000) prop
+    Q.Test.make ~count:10 ~name:("primes_leq_sound"^suffix) (rand_n 20_000) prop
 
   let check_primes_leq_exhaustive =
     let prop n =
@@ -40,7 +40,7 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
       in
       CCList.equal Z.equal l1 l2
     in
-    Q.Test.make ~count:3 ~name:("primes_leq_exaustive"^suffix) Q.(2 -- 2000) prop
+    Q.Test.make ~count:10 ~name:("primes_leq_exaustive"^suffix) Q.(2 -- 2000) prop
 
   let props = [
     check_is_prime;
