@@ -376,31 +376,47 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let[@inline] min x y = if Q.compare x y < 0 then x else y
   let[@inline] max x y = if Q.compare x y < 0 then y else x
 
-  (* find an epsilon that is small enough
-     TODO @gbury: re-explain better
+  (* Find an epsilon that is small enough for finding a solution.
+
+     {!Erat.t} values are used to turn strict bounds ([X > 0]) into
+     non-strict bounds ([X + ε >= 0]), because the simplex algorithm
+     only deals with non-strict bounds.
+     When a solution is found, we need to turn {!Erat.t} into {!Q.t} by
+     finding a rational value that is small enough that it will fit into
+     all the intervals of [t]. This rational will be the actual value of [ε].
   *)
   let solve_epsilon (t:t) : Q.t =
-    let emin = ref Q.minus_inf in
-    let emax = ref Q.inf in
-    M.iter (fun x ({base=low;eps_factor=e1}, {base=upp;eps_factor=e2}) ->
-      let {base=v; eps_factor=e} = value t x in
-      if Q.(e - e1 > zero) then
-        emin := max !emin Q.((low - v) / (e - e1))
-      else if Q.(e - e1 < zero) then (* shoudln't happen as *) (* TODO: what? *)
-        emax := min !emax Q.((low - v) / (e - e1));
-      if Q.(e - e2 > zero) then
-        emax := min !emax Q.((upp - v) / (e - e2))
-      else if Q.(e - e2 < zero) then
-        emin := max !emin Q.((upp - v) / (e - e2));
-    ) t.bounds;
-    if Q.equal Q.minus_inf !emin && Q.equal Q.inf !emax then
+    let emin, emax =
+      M.fold
+        (fun x ({base=low;eps_factor=e_low}, {base=upp;eps_factor=e_upp}) (emin, emax) ->
+           let {base=v; eps_factor=e_v} = value t x in
+           (* lower bound *)
+           let emin, emax =
+             if Q.compare Q.minus_inf low > 0
+             then match Q.compare e_v e_low with
+               | n when n>0 -> max emin Q.((low - v) / (e_v - e_low)), emax
+               | n when n<0 -> emin, min emax Q.((low - v) / (e_v - e_low))
+               | _ -> emin, emax
+             else emin, emax
+           in
+           (* upper bound *)
+           if Q.compare upp Q.inf < 0
+           then match Q.compare e_v e_upp with
+             | n when n>0 -> emin, min emax Q.((upp - v) / (e_v - e_upp))
+             | n when n<0 -> max emin Q.((upp - v) / (e_v - e_upp)), emax
+             | _ -> emin, emax
+           else emin, emax)
+        t.bounds
+        (Q.minus_inf, Q.inf)
+    in
+    if Q.equal Q.minus_inf emin && Q.equal Q.inf emax then
       Q.zero
-    else if Q.compare !emin Q.zero > 0 then
-      !emin
-    else if Q.compare !emax Q.one >= 0 then
+    else if Q.compare emin Q.zero > 0 then
+      emin
+    else if Q.compare emax Q.one >= 0 then
       Q.one
     else
-      !emax
+      emax
 
   let get_full_assign_seq (t:t) : _ Sequence.t =
     let e = solve_epsilon t in
