@@ -19,6 +19,55 @@ module type S_FULL = Simplex_intf.S_FULL
 
 module Vec = CCVector
 
+module Matrix : sig
+  type 'a t
+
+  val create : unit -> 'a t
+  val init : int -> int -> (int -> int -> 'a) -> 'a t
+  val get : 'a t -> int -> int -> 'a
+  val set : 'a t -> int -> int -> 'a -> unit
+  val get_row : 'a t -> int -> 'a Vec.vector
+  val copy : 'a t -> 'a t
+  val n_row : _ t -> int
+  val n_col : _ t -> int
+  val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
+  val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
+  val to_list : 'a t -> 'a list list
+
+  (**/**)
+  val check_invariants : _ t -> bool
+  (**/**)
+end = struct
+  type 'a t = {
+    mutable n_col: int; (* num of columns *)
+    tab: 'a Vec.vector Vec.vector;
+  }
+
+  let[@inline] create() : _ = {tab=Vec.create(); n_col=0}
+
+  let[@inline] init n m f = {
+    tab=Vec.init n (fun i -> Vec.init m (fun j -> f i j));
+    n_col=m;
+  }
+
+  let[@inline] get m i j = Vec.get (Vec.get m.tab i) j
+  let[@inline] get_row m i = Vec.get m.tab i
+  let[@inline] set (m:_ t) i j x = Vec.set (Vec.get m.tab i) j x
+  let[@inline] copy m = {m with tab=Vec.map Vec.copy m.tab}
+
+  let[@inline] n_row m = Vec.length m.tab
+  let[@inline] n_col m = m.n_col
+
+  let push_row m x = Vec.push m.tab (Vec.make (n_col m) x)
+  let push_col m x =
+    m.n_col <- m.n_col + 1;
+    Vec.iter (fun row -> Vec.push row x) m.tab
+  let to_list m = List.map Vec.to_list (Vec.to_list m.tab)
+
+  let check_invariants m = Vec.for_all (fun r -> Vec.length r = n_col m) m.tab
+end
+
+
 (* Simplex Implementation *)
 module Make(Q : Rat.S)(Var: VAR) = struct
 
@@ -69,56 +118,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   module Var_map = M
 
-  module Mat : sig
-    type 'a t
-
-    val create : unit -> 'a t
-    val init : int -> int -> (int -> int -> 'a) -> 'a t
-    val get : 'a t -> int -> int -> 'a
-    val set : 'a t -> int -> int -> 'a -> unit
-    val get_row : 'a t -> int -> 'a Vec.vector
-    val copy : 'a t -> 'a t
-    val n_row : _ t -> int
-    val n_col : _ t -> int
-    val push_row : 'a t -> 'a -> unit (* new row, filled with element *)
-    val push_col : 'a t -> 'a -> unit (* new column, filled with element *)
-    val to_list : 'a t -> 'a list list
-
-    (**/**)
-    val check_invariants : _ t -> bool
-    (**/**)
-  end = struct
-    type 'a t = {
-      mutable n_col: int; (* num of columns *)
-      tab: 'a Vec.vector Vec.vector;
-    }
-
-    let[@inline] create() : _ = {tab=Vec.create(); n_col=0}
-
-    let[@inline] init n m f = {
-      tab=Vec.init n (fun i -> Vec.init m (fun j -> f i j));
-      n_col=m;
-    }
-
-    let[@inline] get m i j = Vec.get (Vec.get m.tab i) j
-    let[@inline] get_row m i = Vec.get m.tab i
-    let[@inline] set (m:_ t) i j x = Vec.set (Vec.get m.tab i) j x
-    let[@inline] copy m = {m with tab=Vec.map Vec.copy m.tab}
-
-    let[@inline] n_row m = Vec.length m.tab
-    let[@inline] n_col m = m.n_col
-
-    let push_row m x = Vec.push m.tab (Vec.make (n_col m) x)
-    let push_col m x =
-      m.n_col <- m.n_col + 1;
-      Vec.iter (fun row -> Vec.push row x) m.tab
-    let to_list m = List.map Vec.to_list (Vec.to_list m.tab)
-
-    let check_invariants m = Vec.for_all (fun r -> Vec.length r = n_col m) m.tab
-  end
-
   type t = {
-    tab : Q.t Mat.t; (* the matrix of coefficients *)
+    tab : Q.t Matrix.t; (* the matrix of coefficients *)
     basic : basic_var Vec.vector; (* basic variables *)
     nbasic : nbasic_var Vec.vector; (* non basic variables *)
     mutable assign : Erat.t M.t; (* assignments *)
@@ -145,7 +146,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     done
 
   let create () : t = {
-    tab = Mat.create ();
+    tab = Matrix.create ();
     basic = Vec.create ();
     nbasic = Vec.create ();
     assign = M.empty;
@@ -155,7 +156,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   }
 
   let copy t = {
-    tab = Mat.copy t.tab;
+    tab = Matrix.copy t.tab;
     basic = Vec.copy t.basic;
     nbasic = Vec.copy t.nbasic;
     assign = t.assign;
@@ -177,7 +178,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* check invariants, for test purposes *)
   let check_invariants (t:t) : bool =
-    Mat.check_invariants t.tab &&
+    Matrix.check_invariants t.tab &&
     Vec.for_all (fun v -> mem_basic t v) t.basic &&
     Vec.for_all (fun v -> mem_nbasic t v) t.nbasic &&
     Vec.for_all (fun v -> not (mem_nbasic t v)) t.basic &&
@@ -193,7 +194,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let find_expr_basic t (x:basic_var) : Q.t Vec.vector =
     begin match index_basic t x with
       | -1 -> unexpected "Trying to find an expression for a non-basic variable."
-      | i -> Mat.get_row t.tab i
+      | i -> Matrix.get_row t.tab i
     end
 
   (* build the expression [y = \sum_i (if x_i=y then 1 else 0)·x_i] *)
@@ -217,7 +218,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let find_coef (t:t) (x:var) (y:var) : Q.t =
     begin match index_basic t x, index_nbasic t y with
       | -1, _ | _, -1 -> assert false
-      | i, j -> Mat.get t.tab i j
+      | i, j -> Matrix.get t.tab i j
     end
 
   (* compute value of basic variable.
@@ -278,9 +279,9 @@ module Make(Q : Rat.S)(Var: VAR) = struct
         l
     in
     (* add new columns to the matrix *)
-    let old_dim = Mat.n_col t.tab in
-    List.iter (fun _ -> Mat.push_col t.tab Q.zero) l;
-    assert (old_dim + List.length l = Mat.n_col t.tab);
+    let old_dim = Matrix.n_col t.tab in
+    List.iter (fun _ -> Matrix.push_col t.tab Q.zero) l;
+    assert (old_dim + List.length l = Matrix.n_col t.tab);
     Vec.append_list t.nbasic (List.rev l);
     (* assign these variables *)
     t.assign <- List.fold_left (fun acc y -> M.add y Erat.zero acc) t.assign l;
@@ -297,20 +298,20 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     t.idx_basic <- M.add x (Vec.length t.basic) t.idx_basic;
     Vec.push t.basic x;
     (* add new row for defining [x] *)
-    assert (Mat.n_col t.tab > 0);
-    Mat.push_row t.tab Q.zero;
-    let row_i = Mat.n_row t.tab - 1 in
+    assert (Matrix.n_col t.tab > 0);
+    Matrix.push_row t.tab Q.zero;
+    let row_i = Matrix.n_row t.tab - 1 in
     assert (row_i >= 0);
     (* now put into the row the coefficients corresponding to [eq],
        expanding basic variables to their definition *)
     List.iter
       (fun (c, x) ->
          let expr = find_expr_total t x in
-         assert (Vec.length expr = Mat.n_col t.tab);
+         assert (Vec.length expr = Matrix.n_col t.tab);
          Vec.iteri
            (fun j c' ->
               if not (Q.equal Q.zero c') then (
-                Mat.set t.tab row_i j Q.(Mat.get t.tab row_i j + c * c')
+                Matrix.set t.tab row_i j Q.(Matrix.get t.tab row_i j + c * c')
               ))
            expr)
       eq;
@@ -469,22 +470,22 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     (* swap values ([x] becomes assigned) *)
     let val_x = value t x in
     t.assign <- t.assign |> M.remove y |> M.add x val_x;
-    (* Matrix Pivot operation *)
+    (* Matrixrix Pivot operation *)
     let kx = index_basic t x in
     let ky = index_nbasic t y in
     for j = 0 to Vec.length t.nbasic - 1 do
       if Var.compare y (Vec.get t.nbasic j) = 0 then (
-        Mat.set t.tab kx j Q.(one / a)
+        Matrix.set t.tab kx j Q.(one / a)
       ) else (
-        Mat.set t.tab kx j Q.(neg (Mat.get t.tab kx j) / a)
+        Matrix.set t.tab kx j Q.(neg (Matrix.get t.tab kx j) / a)
       )
     done;
     for i = 0 to Vec.length t.basic - 1 do
       if i <> kx then (
-        let c = Mat.get t.tab i ky in
-        Mat.set t.tab i ky Q.zero;
+        let c = Matrix.get t.tab i ky in
+        Matrix.set t.tab i ky Q.zero;
         for j = 0 to Vec.length t.nbasic - 1 do
-          Mat.set t.tab i j Q.(Mat.get t.tab i j + c * Mat.get t.tab kx j)
+          Matrix.set t.tab i j Q.(Matrix.get t.tab i j + c * Matrix.get t.tab kx j)
         done
       )
     done;
@@ -574,7 +575,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let get_tab t =
     Vec.to_list t.nbasic,
     Vec.to_list t.basic,
-    Mat.to_list t.tab
+    Matrix.to_list t.tab
 
   let get_assign_map t = M.map Erat.base t.assign
   let get_assign t = List.rev_map (fun (x, v) -> x,v.base) (M.bindings t.assign)
@@ -830,11 +831,11 @@ module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
     Vec.iter (fun x -> fprintf out fmt_cell (str_of_var x)) t.nbasic;
     fprintf out "@,";
     (* rows *)
-    for i=0 to Mat.n_row t.tab-1 do
+    for i=0 to Matrix.n_row t.tab-1 do
       if i>0 then fprintf out "@,";
       let v = Vec.get t.basic i in
       fprintf out fmt_head (str_of_var v);
-      let row = Mat.get_row t.tab i in
+      let row = Matrix.get_row t.tab i in
       Vec.iter (fun q -> fprintf out fmt_cell (str_of_q q)) row;
     done;
     fprintf out "@]"
@@ -858,7 +859,7 @@ module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
     (* print main matrix *)
     Format.fprintf out
       "(@[<hv>simplex@ :n-row %d :n-col %d@ :mat %a@ :assign %a@ :bounds %a@])"
-      (Mat.n_row t.tab) (Mat.n_col t.tab) pp_mat t pp_assign t.assign
+      (Matrix.n_row t.tab) (Matrix.n_col t.tab) pp_mat t pp_assign t.assign
       pp_bounds t.bounds
 end
 
