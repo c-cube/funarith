@@ -376,10 +376,11 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let[@inline] min x y = if Q.compare x y < 0 then x else y
   let[@inline] max x y = if Q.compare x y < 0 then y else x
 
-  (* Find an epsilon that is small enough for finding a solution.
+  (* Find an epsilon that is small enough for finding a solution, yet
+     it must be positive.
 
      {!Erat.t} values are used to turn strict bounds ([X > 0]) into
-     non-strict bounds ([X + ε >= 0]), because the simplex algorithm
+     non-strict bounds ([X >= 0 + ε]), because the simplex algorithm
      only deals with non-strict bounds.
      When a solution is found, we need to turn {!Erat.t} into {!Q.t} by
      finding a rational value that is small enough that it will fit into
@@ -396,6 +397,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
              then match Q.compare e_v e_low with
                | n when n>0 -> max emin Q.((low - v) / (e_v - e_low)), emax
                | n when n<0 -> emin, min emax Q.((low - v) / (e_v - e_low))
+               | 0 when Q.compare e_v Q.zero <> 0 -> max emin Q.one, emax
                | _ -> emin, emax
              else emin, emax
            in
@@ -404,6 +406,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
            then match Q.compare e_v e_upp with
              | n when n>0 -> emin, min emax Q.((upp - v) / (e_v - e_upp))
              | n when n<0 -> max emin Q.((upp - v) / (e_v - e_upp)), emax
+             | 0 when Q.compare e_v Q.zero <> 0 -> max emin Q.one, emax
              | _ -> emin, emax
            else emin, emax)
         t.bounds
@@ -412,7 +415,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     if Q.equal Q.minus_inf emin && Q.equal Q.inf emax then
       Q.zero
     else if Q.compare emin Q.zero > 0 then
-      emin
+      min emin emax
     else if Q.compare emax Q.one >= 0 then
       Q.one
     else
