@@ -140,7 +140,7 @@ let check_sound =
         )
     end
   in
-  QC.Test.make ~long_factor:10 ~count:100 ~name:"simplex_sound" (Problem.rand 20) prop
+  QC.Test.make ~long_factor:10 ~count:2_000 ~name:"simplex_sound" (Problem.rand 20) prop
 
 let check_scalable =
   let prop pb =

@@ -624,8 +624,10 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* printer *)
 
-  let fmt_head = format_of_string "|%8s|| "
-  let fmt_cell = format_of_string "%8s| "
+  let matrix_pp_width = ref 8
+
+  let fmt_head = format_of_string "|%*s|| "
+  let fmt_cell = format_of_string "%*s| "
 
   let pp_erat out e =
     if Q.equal Q.zero (Erat.eps_factor e)
@@ -637,7 +639,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let pp_cert out (c:cert) = match c.cert_expr with
     | [] -> Format.fprintf out "(@[inconsistent-bounds %a@])" Var.pp c.cert_var
     | _ ->
-      let pp_pair = Format.(pair ~sep:(return "@ * ") Q.pp Var.pp) in
+      let pp_pair = Format.(hvbox ~i:2 @@ pair ~sep:(return "@ * ") Q.pp Var.pp) in
       Format.fprintf out "(@[<hv>cert@ :var %a@ :linexp %a@])"
         Var.pp c.cert_var
         Format.(within "[" "]" @@ hvbox @@ list ~sep:(return "@ + ") pp_pair)
@@ -651,16 +653,16 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     let open Format in
     fprintf out "@[<v>";
     (* header *)
-    fprintf out fmt_head "";
-    Vec.iter (fun x -> fprintf out fmt_cell (str_of_var x)) t.nbasic;
+    fprintf out fmt_head !matrix_pp_width "";
+    Vec.iter (fun x -> fprintf out fmt_cell !matrix_pp_width (str_of_var x)) t.nbasic;
     fprintf out "@,";
     (* rows *)
     for i=0 to Matrix.n_row t.tab-1 do
       if i>0 then fprintf out "@,";
       let v = Vec.get t.basic i in
-      fprintf out fmt_head (str_of_var v);
+      fprintf out fmt_head !matrix_pp_width (str_of_var v);
       let row = Matrix.get_row t.tab i in
-      Vec.iter (fun q -> fprintf out fmt_cell (str_of_q q)) row;
+      Vec.iter (fun q -> fprintf out fmt_cell !matrix_pp_width (str_of_q q)) row;
     done;
     fprintf out "@]"
 

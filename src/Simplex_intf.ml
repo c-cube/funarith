@@ -136,6 +136,7 @@ module type S = sig
 
   (**/**)
   val check_invariants : t -> bool (* check that all invariants hold *)
+  val matrix_pp_width : int ref (* horizontal filling when we print the matrix *)
   (**/**)
 end
 
