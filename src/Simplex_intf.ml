@@ -15,10 +15,6 @@
 module type VAR = sig
   type t
   val compare : t -> t -> int
-end
-
-module type VAR_PP = sig
-  include VAR
   val pp : t CCFormat.printer
 end
 
@@ -131,19 +127,15 @@ module type S = sig
 
   (* TODO: proof checker for unsat certificates *)
 
+  val pp_full_state : t CCFormat.printer
+
   (**/**)
   val check_invariants : t -> bool (* check that all invariants hold *)
   (**/**)
 end
 
-module type S_PP = sig
-  include S
-
-  val pp_full_state : t CCFormat.printer
-end
-
 module type VAR_GEN = sig
-  include VAR_PP
+  include VAR
 
   (** Generate fresh variables on demand *)
   module Fresh : sig
@@ -156,7 +148,7 @@ module type VAR_GEN = sig
 end
 
 module type S_FULL = sig
-  include S_PP
+  include S
 
   type subst = Q.t Var_map.t
 

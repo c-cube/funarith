@@ -10,11 +10,9 @@
 open Containers
 
 module type VAR = Simplex_intf.VAR
-module type VAR_PP = Simplex_intf.VAR_PP
 module type VAR_GEN = Simplex_intf.VAR_GEN
 
 module type S = Simplex_intf.S
-module type S_PP = Simplex_intf.S_PP
 module type S_FULL = Simplex_intf.S_FULL
 
 module Vec = CCVector
@@ -325,7 +323,7 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let add_bound_aux (t:t) (x:var) (low:Erat.t) (upp:Erat.t) : unit =
     add_vars t [x];
     let l, u = get_bounds t x in
-    t.bounds <- M.add x (max l low, min u upp) t.bounds
+    t.bounds <- M.add x (Erat.max l low, Erat.min u upp) t.bounds
 
   let add_bounds (t:t) ?strict_lower:(slow=false) ?strict_upper:(supp=false) (x, l, u) : unit =
     let e1 = if slow then Q.one else Q.zero in
@@ -812,11 +810,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
             (print_assign print_var) (M.bindings t.assign)
   *)
 
-end
-
-module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
-  include Make(Q)(Var)
-
   let fmt_head = format_of_string "| %6s || "
   let fmt_cell = format_of_string "%6s | "
 
@@ -869,10 +862,11 @@ module Make_pp(Q : Rat.S)(Var : VAR_PP) = struct
       "(@[<hv>simplex@ :n-row %d :n-col %d@ :mat %a@ :assign %a@ :bounds %a@])"
       (Matrix.n_row t.tab) (Matrix.n_col t.tab) pp_mat t pp_assign t.assign
       pp_bounds t.bounds
+
 end
 
 module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
-  include Make_pp(Q)(Var)
+  include Make(Q)(Var)
 
   type subst = Q.t Var_map.t
 

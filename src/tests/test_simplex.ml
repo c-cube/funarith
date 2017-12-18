@@ -134,7 +134,7 @@ let check_sound =
       | Spl.Unsatisfiable _ -> true (* TODO: check *)
     end
   in
-  QC.Test.make ~long_factor:10 ~count:50 ~name:"simplex_sound" (Problem.rand 20) prop
+  QC.Test.make ~long_factor:10 ~count:100 ~name:"simplex_sound" (Problem.rand 20) prop
 
 let check_scalable =
   let prop pb =
