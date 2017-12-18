@@ -131,7 +131,13 @@ let check_sound =
             "(@[<hv>bad-solution@ :problem %a@ :sol %a@ :simplex-after  %a@ :simplex-before %a@])"
             Problem.pp pb pp_subst subst Spl.pp_full_state simplex Spl.pp_full_state old_simp
         )
-      | Spl.Unsatisfiable _ -> true (* TODO: check *)
+      | Spl.Unsatisfiable cert ->
+        if Spl.check_cert simplex cert then true
+        else (
+          QC.Test.fail_reportf
+            "(@[<hv>bad-certificat@ :problem %a@ :cert %a@ :simplex-after  %a@ :simplex-before %a@])"
+            Problem.pp pb Spl.pp_cert cert Spl.pp_full_state simplex Spl.pp_full_state old_simp
+        )
     end
   in
   QC.Test.make ~long_factor:10 ~count:100 ~name:"simplex_sound" (Problem.rand 20) prop

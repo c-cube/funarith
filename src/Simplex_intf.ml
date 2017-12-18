@@ -85,6 +85,11 @@ module type S = sig
       *)
   val solve : t -> res
 
+  val check_cert : t -> cert -> bool
+  (** checks that the certificat indeed yields to a contradiction
+      in the current state of the simplex.
+      @return true if the certificate is valid. *)
+
   (* TODO: push/pop *)
 
   (** {3 Access functions} *)
@@ -124,6 +129,8 @@ module type S = sig
   val get_all_bounds : t -> (var * (Q.t * Q.t)) list
 
   (* TODO: proof checker for unsat certificates *)
+
+  val pp_cert : cert CCFormat.printer
 
   val pp_full_state : t CCFormat.printer
 

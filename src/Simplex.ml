@@ -193,11 +193,16 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* find the definition of the basic variable [x],
      as a linear combination of non basic variables *)
-  let find_expr_basic t (x:basic_var) : Q.t Vec.vector =
+  let find_expr_basic_opt t (x:var) : Q.t Vec.vector option =
     begin match index_basic t x with
-      | -1 -> unexpected "Trying to find an expression for a non-basic variable."
-      | i -> Matrix.get_row t.tab i
+      | -1 -> None
+      | i -> Some (Matrix.get_row t.tab i)
     end
+
+  let find_expr_basic t (x:basic_var) : Q.t Vec.vector =
+    match find_expr_basic_opt t x with
+      | None -> unexpected "Trying to find an expression for a non-basic variable."
+      | Some e -> e
 
   (* build the expression [y = \sum_i (if x_i=y then 1 else 0)·x_i] *)
   let find_expr_nbasic t (x:nbasic_var) : Q.t Vec.vector =
@@ -548,6 +553,55 @@ module Make(Q : Rat.S)(Var: VAR) = struct
       | AbsurdBounds x ->
         Unsatisfiable { cert_var=x; cert_expr=[]; }
 
+  (* add [c·x] to [m] *)
+  let add_expr_ (x:var) (c:Q.t) (m:Q.t M.t) =
+    let c' = M.get_or ~default:Q.zero x m in
+    let c' = Q.(c + c') in
+    if Q.equal Q.zero c' then M.remove x m else M.add x c' m
+
+  (* dereference basic variables from [c·x], and add the result to [m] *)
+  let rec deref_var_ t x c m = match find_expr_basic_opt t x with
+    | None -> add_expr_ x c m
+    | Some expr_x ->
+      let m = ref m in
+      Vec.iteri
+        (fun i c_i ->
+           let y_i = Vec.get t.nbasic i in
+           m := deref_var_ t y_i Q.(c * c_i) !m)
+        expr_x;
+      !m
+
+  let check_cert (t:t) (c:cert) : bool =
+    let x = c.cert_var in
+    let low_x, up_x = get_bounds t x in
+    begin match c.cert_expr with
+      | [] ->
+        Erat.compare low_x up_x > 0
+      | (c1,y1) :: tail ->
+        let e0 = deref_var_ t x (Q.neg Q.one) M.empty in
+        (* compute bounds for the expression [c.cert_expr],
+           and also compute [c.cert_expr - x] to check if it's 0] *)
+        let scale_bounds c (l,u) =
+          (* maybe invert bounds, if [c < 0] *)
+          if Q.compare c Q.zero < 0
+          then Erat.mul c u, Erat.mul c l
+          else Erat.mul c l, Erat.mul c u
+        in
+        let ly, uy = scale_bounds c1 (get_bounds t y1) in
+        let low, up, expr_minus_x =
+          List.fold_left
+            (fun (l,u,expr_minus_x) (c, y) ->
+               let ly, uy = scale_bounds c (get_bounds t y) in
+               let expr_minus_x = deref_var_ t y c expr_minus_x in
+               Erat.sum l ly, Erat.sum u uy, expr_minus_x)
+              (ly, uy, deref_var_ t y1 c1 e0)
+              tail
+        in
+        (* check that the expanded expression is [x], and that
+           one of the bounds on [x] is incompatible with bounds of [c.cert_expr] *)
+        M.is_empty expr_minus_x &&
+        (Erat.compare low_x up > 0 || Erat.compare up_x low < 0)
+    end
 
   (** External access functions *)
 
@@ -570,8 +624,8 @@ module Make(Q : Rat.S)(Var: VAR) = struct
 
   (* printer *)
 
-  let fmt_head = format_of_string "| %6s || "
-  let fmt_cell = format_of_string "%6s | "
+  let fmt_head = format_of_string "|%8s|| "
+  let fmt_cell = format_of_string "%8s| "
 
   let pp_erat out e =
     if Q.equal Q.zero (Erat.eps_factor e)
@@ -579,6 +633,15 @@ module Make(Q : Rat.S)(Var: VAR) = struct
     else
       Format.fprintf out "(@[<h>%a + @<1>ε * %a@])"
         Q.pp (Erat.base e) Q.pp (Erat.eps_factor e)
+
+  let pp_cert out (c:cert) = match c.cert_expr with
+    | [] -> Format.fprintf out "(@[inconsistent-bounds %a@])" Var.pp c.cert_var
+    | _ ->
+      let pp_pair = Format.(pair ~sep:(return "@ * ") Q.pp Var.pp) in
+      Format.fprintf out "(@[<hv>cert@ :var %a@ :linexp %a@])"
+        Var.pp c.cert_var
+        Format.(within "[" "]" @@ hvbox @@ list ~sep:(return "@ + ") pp_pair)
+        c.cert_expr
 
   let str_of_var = Format.to_string Var.pp
   let str_of_erat = Format.to_string pp_erat
