@@ -339,33 +339,6 @@ module Make(Q : Rat.S)(Var: VAR) = struct
   let add_lower_bound t ?strict x l = add_bounds t ?strict_lower:strict (x,l,Q.inf)
   let add_upper_bound t ?strict x u = add_bounds t ?strict_upper:strict (x,Q.minus_inf,u)
 
-  (* Modifies bounds in place. Do NOT export. *)
-  let add_bounds_mut
-      ?force:(b=false) t
-      ?strict_lower:(slow=false)
-      ?strict_upper:(supp=false)
-      (x, l, u) =
-    let low = Erat.make l (if slow then Q.one else Q.zero) in
-    let upp = Erat.make u (if supp then Q.neg Q.one else Q.zero) in
-    if mem_basic t x || mem_nbasic t x then (
-      if b then (
-        t.bounds <- M.add x (low, upp) t.bounds
-      ) else (
-        let low', upp' = get_bounds t x in
-        t.bounds <- M.add x (max low low', min upp upp') t.bounds;
-        if mem_nbasic t x then (
-          let (b, v) = is_within_bounds t x in
-          if not b then (
-            t.assign <- M.add x v t.assign
-          )
-        )
-      )
-    ) else (
-      unexpected "Variable doesn't exists"
-    )
-
-  let change_bounds = add_bounds_mut ~force:true
-
   (* full assignment *)
   let full_assign (t:t) : (var * Erat.t) Sequence.t =
     Sequence.append (Vec.to_seq t.nbasic) (Vec.to_seq t.basic)
