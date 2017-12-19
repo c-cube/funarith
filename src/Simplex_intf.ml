@@ -105,6 +105,13 @@ module type S = sig
   (**/**)
 end
 
+(* TODO: benchmark 
+   - copy current implem;
+   - move random generator somewhere shared;
+   - compare cur & old implem; 
+   - optimize (remove find_expr?))
+*)
+
 module type VAR_GEN = sig
   include VAR
 
