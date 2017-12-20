@@ -76,9 +76,6 @@ module type S = sig
     (** Get underlying equations.
         {b NOTE}: do not modify! *)
 
-    val n_vars : t -> int
-    (** Number of variables in each equation *)
-
     type solution = Z.t array
     (** Vector of positive coefficients for the variables *)
 
