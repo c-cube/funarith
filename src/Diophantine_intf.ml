@@ -101,4 +101,7 @@ module type S = sig
     val log_enabled : bool ref
     (**/**)
   end
+
+  (* TODO: solve heterogeneous systems, using homogeneous system + first variable
+     with coefficient [-rhs_i], being blocked between [0,1] using [cut] *)
 end
