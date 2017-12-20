@@ -24,7 +24,8 @@ depends: [
   "sequence"
   "ocamlfind"
   "ounit" { test }
-  "jbuilder" {build}
+  "qcheck" { test }
+  "jbuilder" { build }
 ]
 depopts: [
   "zarith"
