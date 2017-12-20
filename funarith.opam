@@ -21,6 +21,7 @@ remove: [
 ]
 depends: [
   "containers"
+  "sequence"
   "ocamlfind"
   "ounit" { test }
   "jbuilder" {build}
