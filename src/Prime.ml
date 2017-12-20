@@ -1,7 +1,7 @@
 
 module type S = Prime_intf.S
 
-module Make(I : Int.S) = struct
+module Make(I : Int.FULL) = struct
   module Z = I
 
   module Tbl = Hashtbl.Make(Z)

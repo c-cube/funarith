@@ -4,12 +4,12 @@ module Vec = CCVector
 
 module type S = Diophantine_intf.S
 
-module Make(Z : Int.S) = struct
+module Make(Z : Int.DERIVED) = struct
   module Z = Z
 
   exception Bad_shape
 
-  let[@inline] is_zero x : bool = Z.sign x=0
+  let[@inline] is_zero x : bool = Z.equal Z.zero x
 
   module Solution = struct
     type t = Z.t array

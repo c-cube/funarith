@@ -7,7 +7,11 @@
     is Zarith, with module {!Z}
 *)
 
-module type S = Int_intf.S
+module type FULL = Int_intf.FULL
+module type BASE = Int_intf.BASE
+module type DERIVED = Int_intf.DERIVED
 
-module Default : S with type t = int
+module Default : FULL with type t = int
 (** Fixed precision *)
+
+module Derive(T : BASE) : DERIVED with type t = T.t 

@@ -1,5 +1,5 @@
 module type S = sig
-  module Z : Int.S
+  module Z : Int.FULL
 
   type divisor = {
     prime : Z.t;

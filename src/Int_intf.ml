@@ -1,23 +1,35 @@
 
-module type S = sig
+(** Core operations *)
+module type BASE = sig
   type t
   val (+) : t -> t -> t
   val (-) : t -> t -> t
   val ( * ) : t -> t -> t
+  val compare : t -> t -> int
+  val of_int : int -> t
+  val pp : t CCFormat.printer
+end
+
+(** Operations that can be derived from {!BASE} *)
+module type DERIVED = sig
+  include BASE
+
   val pred : t -> t
   val succ : t -> t
   val zero : t
+  val sign : t -> int
+  val equal : t -> t -> bool
   val one : t
   val minus_one : t
-  val sign : t -> int
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
+end
+
+(** All basic operations, along with more sophisticated ones *)
+module type FULL = sig
+  include DERIVED
   val hash : t -> int
-  val of_int : int -> t
   val divexact : t -> t -> t (* TODO: specify *)
   val rem : t -> t -> t
   val sqrt : t -> t
-  val pp : t CCFormat.printer
 
   val probab_prime : t -> int -> int
   (** [probab_prime n strength] is a sound, fast, but incomplete

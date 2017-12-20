@@ -2,7 +2,7 @@
 (** {2 Abstract representation of Integers} *)
 
 module type S = sig
-  module Z : Int.S
+  module Z : Int.DERIVED
 
   exception Bad_shape
 
