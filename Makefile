@@ -14,7 +14,6 @@ doc:
 
 test:
 	jbuilder runtest --no-buffer -j $J
-	# ./tests/quick/all.sh # FIXME?
 
 WATCH?=all
 watch:
