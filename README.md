@@ -1,4 +1,4 @@
-# Funarith
+# Funarith [![Build Status](https://travis-ci.org/c-cube/funarith.svg?branch=master)](https://travis-ci.org/c-cube/funarith)
 
 Functorial implementation of classic algorithms for arithmetic, in OCaml.
 
