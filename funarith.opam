@@ -20,8 +20,8 @@ remove: [
     ["ocamlfind" "remove" "funarith"]
 ]
 depends: [
-  "containers"
-  "sequence"
+  "containers" { >= "1.0" }
+  "sequence" { >= "0.6" }
   "ocamlfind"
   "ounit" { test }
   "qcheck" { test }
