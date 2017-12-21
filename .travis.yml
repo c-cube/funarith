@@ -1,17 +1,17 @@
 language: c
 env:
   # Test that funarith installs correctly without its test dependencies
-  - TEST=false OCAML_VERSION=4.03.0
-  # Test installation through opam, with the TEST variable
+  - OPAMBUILDTEST=false OCAML_VERSION=4.03.0
+  # Test installation through opam, with the OPAMBUILDTEST variable
   # set to true so that opam runs the tests
-  - TEST=true OCAML_VERSION=4.03.0
-  - TEST=true OCAML_VERSION=4.03.0+flambda
-  - TEST=true OCAML_VERSION=4.04.2
-  - TEST=true OCAML_VERSION=4.04.2+flambda
-  - TEST=true OCAML_VERSION=4.05.0
-  - TEST=true OCAML_VERSION=4.05.0+flambda
-  - TEST=true OCAML_VERSION=4.06.0
-  - TEST=true OCAML_VERSION=4.06.0+flambda
+  - OPAMBUILDTEST=true OCAML_VERSION=4.03.0
+  - OPAMBUILDTEST=true OCAML_VERSION=4.03.0+flambda
+  - OPAMBUILDTEST=true OCAML_VERSION=4.04.2
+  - OPAMBUILDTEST=true OCAML_VERSION=4.04.2+flambda
+  - OPAMBUILDTEST=true OCAML_VERSION=4.05.0
+  - OPAMBUILDTEST=true OCAML_VERSION=4.05.0+flambda
+  - OPAMBUILDTEST=true OCAML_VERSION=4.06.0
+  - OPAMBUILDTEST=true OCAML_VERSION=4.06.0+flambda
 addons:
   apt:
     sources:
@@ -30,8 +30,6 @@ before_install:
   - eval `opam config env`
   - opam pin add --no-action funarith .
 install:
-  - if [ "$TEST" = "false" ]; then opam install --deps-only funarith; fi
-  - if [ "$TEST" = "true" ]; then opam install -t --deps-only funarith; fi
+  - opam install --deps-only funarith
 script:
-  - if [ "$TEST" = "false" ]; then opam install funarith; fi
-  - if [ "$TEST" = "true" ]; then opam install -t funarith; fi
+  - opam install funarith
