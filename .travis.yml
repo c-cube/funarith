@@ -23,13 +23,19 @@ addons:
 #  directories:
 #    - $HOME/.opam
 before_install:
+  # Some opam boilerplate
   - export OPAMYES=1
   - export OPAMVERBOSE=1
   - opam init
   - opam switch ${OCAML_VERSION}
   - eval `opam config env`
-  - opam pin add --no-action funarith .
+  # Pin sequence to its dev repo because the last relase
+  # lack adequate test dependencies
+  - opam pin add --dev-repo sequence
 install:
+  # Install dependencies
+  - opam pin add --no-action funarith .
   - opam install --deps-only funarith
 script:
+  # Build, test & install funarith
   - opam install funarith
