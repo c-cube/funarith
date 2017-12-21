@@ -71,9 +71,6 @@ module Make(Q : Rat.S)(Var: VAR)
   exception Unsat of Var.t
   exception AbsurdBounds of Var.t
   exception NoneSuitable
-  exception UnExpected of string
-
-  let[@inline] unexpected s = raise (UnExpected s)
 
   type var = Var.t
 
@@ -195,7 +192,7 @@ module Make(Q : Rat.S)(Var: VAR)
 
   let find_expr_basic t (x:basic_var) : Q.t Vec.vector =
     match find_expr_basic_opt t x with
-      | None -> unexpected "Trying to find an expression for a non-basic variable."
+      | None -> assert false
       | Some e -> e
 
   (* build the expression [y = \sum_i (if x_i=y then 1 else 0)·x_i] *)
@@ -209,10 +206,10 @@ module Make(Q : Rat.S)(Var: VAR)
   let find_expr_total (t:t) (x:var) : Q.t Vec.vector =
     if mem_basic t x then
       find_expr_basic t x
-    else if mem_nbasic t x then
+    else (
+      assert (mem_nbasic t x);
       find_expr_nbasic t x
-    else
-      unexpected "Unknown variable"
+    )
 
   (* compute value of basic variable.
      It can be computed by using [x]'s definition
@@ -224,8 +221,7 @@ module Make(Q : Rat.S)(Var: VAR)
     for i = 0 to Vec.length expr - 1 do
       let val_nbasic_i =
         try M.find (Vec.get t.nbasic i) t.assign
-        with Not_found ->
-          unexpected "Basic variable in expression of a basic variable."
+        with Not_found -> assert false
       in
       res := Erat.sum !res (Erat.mul (Vec.get expr i) val_nbasic_i)
     done;
@@ -284,7 +280,7 @@ module Make(Q : Rat.S)(Var: VAR)
   (* define basic variable [x] by [eq] in [t] *)
   let add_eq (t:t) (x, eq : basic_var * _ list) : unit =
     if mem_basic t x || mem_nbasic t x then (
-      unexpected "Variable already defined.";
+      invalid_arg (Format.sprintf "Variable `%a` already defined." Var.pp x);
     );
     add_vars t (List.map snd eq);
     (* add [x] as a basic var *)
