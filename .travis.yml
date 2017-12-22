@@ -31,7 +31,7 @@ before_install:
   - eval `opam config env`
   # Pin sequence to its dev repo because the last relase
   # lack adequate test dependencies
-  - opam pin add --dev-repo sequence
+  - opam pin add -k git sequence https://github.com/c-cube/sequence.git#wip-jbuilder
 install:
   # Install dependencies
   - opam pin add --no-action funarith .
