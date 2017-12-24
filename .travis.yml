@@ -33,7 +33,7 @@ install:
   - ${HOME}/opam install --deps-only funarith
 script:
   # Build and launch the tests
-  - if [ "$TO_TEST" = "tests" ]; make build && make test; fi
+  - if [ "$TO_TEST" = "tests" ]; then make build && make test; fi
   # Try and install the package with opam
-  - if [ "$TO_TEST" = "install" ]; ${HOME}/opam install funarith; fi
+  - if [ "$TO_TEST" = "install" ]; then ${HOME}/opam install funarith; fi
 
