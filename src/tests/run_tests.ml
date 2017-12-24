@@ -3,10 +3,7 @@ open OUnit
 
 let suite =
   "libarith" >::: [
-    "diophantine" >::: [
-      "" >:: Test_diophantine.test1;
-      "" >:: Test_diophantine.test2;
-    ];
+    "diophantine" >::: Test_diophantine.suite;
   ]
 
 let props =

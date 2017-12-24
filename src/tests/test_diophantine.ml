@@ -3,29 +3,12 @@ open Containers
 module QC = QCheck
 module D = Funarith_zarith.Diophantine
 
-let test1 () =
-  let module E = D.Homogeneous_eqn in
-  let e = E.make Z.( [| ~$ 1; ~$ (-2); ~$ 4 |] ) in
-  let sol = E.find_a_solution e in
-  OUnit.assert_bool "has solutions" (sol <> None);
-  let sol = CCOpt.get_exn sol in
-  OUnit.assert_bool "solution non trivial"
-    begin
-      CCArray.exists (fun x -> Z.sign x <> 0) sol
-    end;
-  OUnit.assert_bool "solution is good"
-    begin
-      let subst_in_sol = E.compute e sol in
-      Z.equal Z.zero @@ subst_in_sol
-    end;
-  ()
-
 let mk_arr = Array.map Z.of_int
 let mk_ar2 = Array.map mk_arr
 
 module S = D.Homogeneous_system
 
-let test2 () =
+let test_example () =
   (* example from the paper *)
   let eqns =
     S.make
@@ -45,6 +28,10 @@ let test2 () =
     ~printer:Format.(to_string @@ list @@ array Z.pp_print)
     expected_sols sols;
   ()
+
+let suite = OUnit.( [
+  "test_example" >:: test_example;
+])
 
 (* properties *)
 
@@ -66,7 +53,7 @@ let rand_system : S.t QC.arbitrary =
   QC.set_gen gen base
 
 (* find if there's an equation not satisfied by [sol] *)
-let find_bad_eqn (sys:S.t) (sol:S.solution) : _ option =
+let find_bad_eqn (sys:S.t) (sol:D.solution) : _ option =
   CCArray.find
     (fun eqn ->
        assert (Array.length eqn = Array.length sol);
