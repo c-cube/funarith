@@ -14,7 +14,7 @@ env:
   - TO_TEST=tests OPAMBUILDTEST=true OCAML_VERSION=4.06.0
   - TO_TEST=tests OPAMBUILDTEST=true OCAML_VERSION=4.06.0+flambda
 matrix:
-  allowed_failure:
+  allow_failures:
     # containers 1.4 fails to build on 4.03.0+flambda
     - env: TO_TEST=tests OPAMBUILDTEST=true OCAML_VERSION=4.03.0+flambda
     # opam-installer fails on these versions (will probably be fixed before the official opam2 release
