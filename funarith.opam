@@ -23,8 +23,10 @@ depends: [
   "containers" { >= "1.0" }
   "sequence" { >= "0.6" }
   "ocamlfind"
+  "opam-installer"
   "ounit" { test }
   "qcheck" { test }
+  "zarith" { test }
   "jbuilder" { build }
 ]
 depopts: [
