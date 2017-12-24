@@ -25,7 +25,7 @@ before_install:
   - export OPAMYES=1
   - export OPAMVERBOSE=1
   - ${HOME}/opam init
-  - ${HOME}/opam switch ${OCAML_VERSION}
+  - ${HOME}/opam switch create ${OCAML_VERSION}
   - eval `${HOME}/opam config env`
 install:
   # Install dependencies
