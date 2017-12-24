@@ -23,6 +23,8 @@ before_install:
   - chmod +x ${HOME}/opam
   # Some opam boilerplate
   - export OPAMYES=1
+  - export OPAMJOBS=2
+  # Init opam, and the default switch with the right ocaml version
   - ${HOME}/opam init --compiler=${OCAML_VERSION}
   - eval `${HOME}/opam config env`
   - export OPAMVERBOSE=1
