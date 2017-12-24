@@ -2,6 +2,10 @@
 
 Functorial implementation of classic algorithms for arithmetic, in OCaml.
 
+## Documentation
+
+https://c-cube.github.io/funarith/
+
 ## Planned features
 
 We should have at least:
