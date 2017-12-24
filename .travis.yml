@@ -23,9 +23,9 @@ before_install:
   - chmod +x ${HOME}/opam
   # Some opam boilerplate
   - export OPAMYES=1
-  - export OPAMVERBOSE=1
   - ${HOME}/opam init ${OCAML_VERSION}
   - eval `${HOME}/opam config env`
+  - export OPAMVERBOSE=1
 install:
   # Install dependencies
   - ${HOME}/opam pin add --no-action funarith .
