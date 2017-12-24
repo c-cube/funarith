@@ -30,7 +30,7 @@ depends: [
   "jbuilder" { build }
 ]
 depopts: [
-  "zarith" { test }
+  "zarith"
 ]
 tags: [ "arithmetic" ]
 homepage: "https://github.com/c-cube/funarith/"
