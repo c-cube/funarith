@@ -1,17 +1,14 @@
 language: c
 env:
   # Test that funarith installs correctly without its test dependencies
-  - OPAMBUILDTEST=false OCAML_VERSION=4.03.0
-  # Test installation through opam, with the OPAMBUILDTEST variable
-  # set to true so that opam runs the tests
-  - OPAMBUILDTEST=true OCAML_VERSION=4.03.0
-  - OPAMBUILDTEST=true OCAML_VERSION=4.03.0+flambda
-  - OPAMBUILDTEST=true OCAML_VERSION=4.04.2
-  - OPAMBUILDTEST=true OCAML_VERSION=4.04.2+flambda
-  - OPAMBUILDTEST=true OCAML_VERSION=4.05.0
-  - OPAMBUILDTEST=true OCAML_VERSION=4.05.0+flambda
-  - OPAMBUILDTEST=true OCAML_VERSION=4.06.0
-  - OPAMBUILDTEST=true OCAML_VERSION=4.06.0+flambda
+  - OCAML_VERSION=4.03.0
+  - OCAML_VERSION=4.03.0+flambda
+  - OCAML_VERSION=4.04.2
+  - OCAML_VERSION=4.04.2+flambda
+  - OCAML_VERSION=4.05.0
+  - OCAML_VERSION=4.05.0+flambda
+  - OCAML_VERSION=4.06.0
+  - OCAML_VERSION=4.06.0+flambda
 addons:
   apt:
     sources:
@@ -29,13 +26,10 @@ before_install:
   - opam init
   - opam switch ${OCAML_VERSION}
   - eval `opam config env`
-  # Pin sequence to its dev repo because the last relase
-  # lack adequate test dependencies
-  - opam pin add -k git sequence https://github.com/c-cube/sequence.git#wip-jbuilder
 install:
   # Install dependencies
   - opam pin add --no-action funarith .
-  - opam install --deps-only funarith
+  - opam install --deps-only -t funarith
 script:
-  # Build, test & install funarith
-  - opam install funarith
+  - make build
+  - make test
