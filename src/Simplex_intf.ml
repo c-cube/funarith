@@ -11,13 +11,6 @@
     implementation at https://gbury.eu/public/papers/stage-m2.pdf
 *)
 
-(** The types of the variables used by the equations to solve *)
-module type VAR = sig
-  type t
-  val compare : t -> t -> int
-  val pp : t CCFormat.printer
-end
-
 module type S = sig
   (** Rational number implementation *)
   module Q : Rat.S
@@ -105,81 +98,38 @@ module type S = sig
   (**/**)
 end
 
-(* TODO: benchmark 
+(* TODO: benchmark
    - copy current implem;
    - move random generator somewhere shared;
-   - compare cur & old implem; 
+   - compare cur & old implem;
    - optimize (remove find_expr?))
 *)
 
-module type VAR_GEN = sig
-  include VAR
-
-  (** Generate fresh variables on demand *)
-  module Fresh : sig
-    type var = t
-
-    type t
-    val create : unit -> t
-    val fresh : t -> var
-  end
-end
-
 module type S_FULL = sig
+
   include S
 
-  type subst = Q.t Var_map.t
+  module L : Expr.Linear.S with type C.t = Q.t and type Var.t = var
 
-  module Expr : sig
-    type t = Q.t Var_map.t
-    val is_empty : t -> bool
-    val empty : t
-    val singleton : Q.t -> var -> t
-    val singleton1 : var -> t
-    val add : Q.t -> var -> t -> t
-    module Infix : sig
-      val (+) : t -> t -> t
-      val (-) : t -> t -> t
-      val ( * ) : Q.t -> t -> t
-    end
-    include module type of Infix
-    val of_list : (Q.t * var) list -> t
-    val to_list : t -> (Q.t * var) list
-    val pp : t CCFormat.printer
-    val eval : subst -> t -> Q.t
+  type constr = L.Constr.op L.Constr.t
+  type pb = constr list
+  (** Problems for the simplex. *)
+
+  val pp : pb CCFormat.printer
+
+  module Infix : sig
+    val (&&) : pb -> pb -> pb
   end
+  include module type of Infix
 
-  module Constr : sig
-    type op = Leq | Geq | Lt | Gt | Eq
+  val eval : L.subst -> pb -> bool
+  (** Evaluate a problem.
+      TODO: move the function to Expr ? *)
 
-    type t = {
-      op: op;
-      expr: Expr.t;
-      const: Q.t;
-    }
+  val add_constr : t -> constr -> unit
+  (** Add a constraint to a simplex state. *)
 
-    val make : op -> Expr.t -> Q.t -> t
-    val op : t -> op
-    val expr : t -> Expr.t
-    val const : t -> Q.t
-    val pp : t CCFormat.printer
+  val add_problem : t -> pb -> unit
+  (** Add a problem to a simplex state. *)
 
-    val eval : subst -> t -> bool
-  end
-
-  module Problem : sig
-    type t = Constr.t list
-    module Infix : sig
-      val ( && ) : t -> t -> t
-    end
-    include module type of Infix
-    val eval : subst -> t -> bool
-    val pp : t CCFormat.printer
-  end
-
-  val add_constr : t -> Constr.t -> unit
-  (** Add a constraint *)
-
-  val add_problem : t -> Problem.t -> unit
 end
-
