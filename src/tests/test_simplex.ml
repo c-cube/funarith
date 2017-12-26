@@ -8,17 +8,19 @@ module Var = struct
 
   let pp out x = Format.fprintf out "X_%d" x
 
-  module Fresh = struct
-    type var = t
-    type t = int ref
-    let create() = ref ~-1
-    let fresh r = decr r; !r
-  end
-
   let rand n : t QC.arbitrary = QC.make ~print:(Format.to_string pp) @@ QC.Gen.(0--n)
 end
 
-module Spl = Funarith_zarith.Simplex.Make_full(Var)
+module Fresh = struct
+  type var = Var.t
+  type t = int ref
+  let create() = ref ~-1
+  let fresh r = decr r; !r
+end
+
+module L = Funarith.Expr.Linear.Make(Funarith_zarith.Rat)(Var)
+
+module Spl = Funarith_zarith.Simplex.Make_full(Fresh)(L)
 
 let rand_n low n : Z.t QC.arbitrary =
   QC.map ~rev:Z.to_int Z.of_int QC.(low -- n)
@@ -48,12 +50,12 @@ let filter_shrink (f:'a->bool) (a:'a QC.arbitrary) : 'a QC.arbitrary =
       QC.set_shrink shr' a
 
 module Expr = struct
-  include Spl.Expr
+  include Spl.L.Comb
 
   let rand n : t QC.arbitrary =
     (* generate non-empty expressions *)
     let a =
-      QC.map_same_type (fun e -> if is_empty e then singleton1 0 else e) @@
+      QC.map_same_type (fun e -> if is_empty e then monomial1 0 else e) @@
       QC.map ~rev:to_list of_list @@
       QC.list_of_size QC.Gen.(1--n) @@ QC.pair rand_q (Var.rand 10)
     in
@@ -61,9 +63,9 @@ module Expr = struct
 end
 
 module Constr = struct
-  include Spl.Constr
+  include Spl.L.Constr
 
-  let shrink c : t QC.Iter.t =
+  let shrink c : _ t QC.Iter.t =
     let open QC.Iter in
     append
       (Option.map_or ~default:empty

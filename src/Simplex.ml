@@ -9,8 +9,8 @@
 
 open Containers
 
-module type VAR = Simplex_intf.VAR
-module type VAR_GEN = Simplex_intf.VAR_GEN
+module type VAR = Expr_intf.VAR
+module type FRESH = Expr_intf.FRESH
 
 module type S = Simplex_intf.S
 module type S_FULL = Simplex_intf.S_FULL
@@ -643,125 +643,41 @@ module Make(Q : Rat.S)(Var: VAR)
 
 end
 
-module Make_full(Q : Rat.S)(Var : VAR_GEN) = struct
-  include Make(Q)(Var)
+module Make_full(Q : Rat.S)(F : FRESH)
+    (L: Expr.Linear.S with type C.t = Q.t and type Var.t = F.var) = struct
 
-  type subst = Q.t Var_map.t
+  include Make(Q)(L.Var)
 
-  module Expr = struct
-    type t = Q.t Var_map.t
+  module L = L
 
-    let empty = Var_map.empty
+  type constr = L.Constr.op L.Constr.t
+  type pb = constr list
 
-    let singleton c x =
-      if Q.compare c Q.zero <> 0 then Var_map.singleton x c else empty
-
-    let singleton1 x = Var_map.singleton x Q.one
-
-    let add c x e =
-      let c' = Var_map.get_or ~default:Q.zero x e in
-      let c' = Q.(c + c') in
-      if Q.equal Q.zero c' then Var_map.remove x e else Var_map.add x c' e
-
-    let is_empty = Var_map.is_empty
-
-    let[@inline] map2 ~f a b =
-      Var_map.merge_safe
-        ~f:(fun _ rhs -> match rhs with
-          | `Left x | `Right x -> Some x
-          | `Both (x,y) -> f x y)
-        a b
-
-    let[@inline] some_if_nzero x = if Q.equal Q.zero x then None else Some x
-
-    let filter_map ~f m =
-      Var_map.fold
-        (fun x y m -> match f y with
-           | None -> m
-           | Some z -> Var_map.add x z m)
-        m Var_map.empty
-
-    module Infix = struct
-      let (+) = map2 ~f:(fun a b -> some_if_nzero Q.(a + b))
-      let (-) = map2 ~f:(fun a b -> some_if_nzero Q.(a - b))
-      let ( * ) q = filter_map ~f:(fun x -> some_if_nzero Q.(x * q))
-    end
-
-    include Infix
-
-    let of_list l = List.fold_left (fun e (c,x) -> add c x e) empty l
-    let to_list e = Var_map.bindings e |> List.rev_map Pair.swap
-
-    let pp_pair = Format.(pair ~sep:(return "@ * ") Q.pp Var.pp)
-    let pp out (e:t) = Format.(hovbox @@ list ~sep:(return "@ + ") pp_pair) out (to_list e)
-
-    let eval (subst : subst) (e:t) : Q.t =
-      Var_map.fold
-        (fun x c acc -> Q.(acc + c * (Var_map.find x subst)))
-        e Q.zero
+  module Infix = struct
+    let (&&) = List.append
   end
+  include Infix
 
-  module Constr = struct
-    type op = Leq | Geq | Lt | Gt | Eq
+  let eval subst = List.for_all (L.Constr.eval subst)
 
-    let pp_op out o =
-      Format.string out
-        (match o with
-          | Leq -> "=<" | Geq -> ">=" | Lt -> "<" | Gt -> ">" | Eq -> "=")
+  let pp = Format.(hvbox @@ list ~sep:(return "@ @<1>∧ ") L.Constr.pp)
 
-    type t = {
-      op: op;
-      expr: Expr.t;
-      const: Q.t;
-    }
-
-    let make op expr const : t = {op;expr;const}
-    let op t = t.op
-    let expr t = t.expr
-    let const t = t.const
-
-    let pp out c =
-      Format.fprintf out "(@[%a@ %a %a@])" Expr.pp c.expr pp_op c.op Q.pp c.const
-
-    let eval (subst:subst) (c:t) : bool =
-      let v = Expr.eval subst c.expr in
-      begin match c.op with
-        | Leq -> Q.compare v c.const <= 0
-        | Geq -> Q.compare v c.const >= 0
-        | Lt -> Q.compare v c.const < 0
-        | Gt -> Q.compare v c.const > 0
-        | Eq -> Q.compare v c.const = 0
-      end
-  end
-
-  module Problem = struct
-    type t = Constr.t list
-
-    module Infix = struct
-      let (&&) = List.append
-    end
-    include Infix
-
-    let eval subst = List.for_all (Constr.eval subst)
-
-    let pp = Format.(hvbox @@ list ~sep:(return "@ @<1>∧ ") Constr.pp)
-  end
-
-  let fresh_var = Var.Fresh.create()
+  let fresh_var = F.create ()
 
   (* add a constraint *)
-  let add_constr (t:t) (c:Constr.t) : unit =
-    let (x:var) = Var.Fresh.fresh fresh_var in
-    let q = Constr.const c in
-    add_eq t (x, Expr.to_list (Constr.expr c));
-    begin match c.Constr.op with
-      | Constr.Leq -> add_upper_bound t ~strict:false x q
-      | Constr.Geq -> add_lower_bound t ~strict:false x q
-      | Constr.Lt -> add_upper_bound t ~strict:true x q
-      | Constr.Gt -> add_lower_bound t ~strict:true x q
-      | Constr.Eq -> add_bounds t ~strict_lower:false ~strict_upper:false (x,q,q)
+  let add_constr (t:t) (c:constr) : unit =
+    let (x:var) = F.fresh fresh_var in
+    let e, op, q = L.Constr.split c in
+    add_eq t (x, L.Comb.to_list e);
+    begin match op with
+      | `Leq -> add_upper_bound t ~strict:false x q
+      | `Geq -> add_lower_bound t ~strict:false x q
+      | `Lt -> add_upper_bound t ~strict:true x q
+      | `Gt -> add_lower_bound t ~strict:true x q
+      | `Eq -> add_bounds t ~strict_lower:false ~strict_upper:false (x,q,q)
     end
 
-  let add_problem (t:t) (pb:Problem.t) : unit = List.iter (add_constr t) pb
+  let add_problem (t:t) (pb:pb) : unit = List.iter (add_constr t) pb
+
 end
 
