@@ -7,7 +7,6 @@
     are either rationals, or integers.
 *)
 module type COEF = sig
-
   type t
 
   val equal : t -> t -> bool
@@ -32,7 +31,6 @@ module type COEF = sig
   val (-) : t -> t -> t
   val ( * ) : t -> t -> t
   (** Standard operations on coefficients. *)
-
 end
 
 (** {2 Variable interfaces} *)
@@ -58,7 +56,6 @@ end
     from any other.
 *)
 module type FRESH = sig
-
   type var
   (** The type of variables. *)
 
@@ -71,7 +68,6 @@ module type FRESH = sig
   val fresh : t -> var
   (** Create a fresh variable using an existing variable as base.
       TODO: need some explaining, about the difference with {!create}. *)
-
 end
 
 (** Generative Variable interface.
@@ -82,12 +78,10 @@ end
     formats used by algorithms).
 *)
 module type VAR_GEN = sig
-
   include VAR
 
   (** Generate fresh variables on demand *)
   module Fresh : FRESH with type var := t
-
 end
 
 
@@ -99,8 +93,7 @@ end
     combinations of variables), and linear constraints, where
     the value of a linear expressions is constrained.
 *)
-module type Linear = sig
-
+module type S = sig
   module C : COEF
   (** Coeficients used. Can be integers as well as rationals. *)
 
@@ -122,12 +115,8 @@ module type Linear = sig
       to coefficients. This allows for very fast computations.
   *)
   module Comb : sig
-
-    type t = C.t Var_map.t
-    (** The type of linear combinations. Pretty transparent,
-        most invariants are already enforced by the {!Var_map} module.
-        TODO: make it private to enforce normalization ?
-    *)
+    type t = private C.t Var_map.t
+    (** The type of linear combinations. *)
 
     val compare : t -> t -> int
     (** Comparisons on linear combinations. *)
@@ -137,10 +126,6 @@ module type Linear = sig
 
     val is_empty : t -> bool
     (** Is the given expression empty ?*)
-
-    val normalize : t -> t
-    (** Normalizes the combinations (i.e removes all zero coefficients).
-        TODO: remove this function and make the type private ? *)
 
     (** {5 Creation} *)
 
@@ -155,6 +140,7 @@ module type Linear = sig
 
     val add : C.t -> var -> t -> t
     (** [add n v t] adds the monome [n * v] to the combination [t]. *)
+
 
     (** Infix operations on combinations
 
@@ -172,28 +158,33 @@ module type Linear = sig
     (** Include the previous module. *)
 
     val of_list : (C.t * var) list -> t
+
     val to_list : t -> (C.t * var) list
     (** Converters to and from lists of monomes. *)
 
+    val of_map : C.t Var_map.t -> t
+
+    val to_map : t -> C.t Var_map.t
 
     (** {5 Semantics} *)
 
     val eval : subst -> t -> C.t
     (** Evaluate a linear combination given a substitution for its variables.
         TODO: document potential exceptions raised ?*)
-
   end
 
+  (** {2 Linear expressions.} *)
 
-  (** Linear expressions.
-
-      Linear expressions represent linear arithmetic expressions as
-      a linear combination and a constant.
-  *)
+  (** Linear expressions represent linear arithmetic expressions as
+      a linear combination and a constant.  *)
   module Expr : sig
-
     type t
     (** The type of linear expressions. *)
+
+    val comb : t -> Comb.t
+    val const : t -> C.t
+
+    val is_zero : t -> bool
 
     val compare : t -> t -> int
     (** Standard comparison function on expressions. *)
@@ -204,11 +195,16 @@ module type Linear = sig
     val zero : t
     (** The expression [0]. *)
 
-    val const : C.t -> t
+    val of_const : C.t -> t
     (** The constant expression. *)
 
-    val mk : Comb.t -> C.t -> t
-    (** [mk c n] makes the linear expression [c + n]. *)
+    val of_comb : Comb.t -> t
+    (** Combination without constant *)
+
+    val of_list : (C.t * Var.t) list -> t
+
+    val make : Comb.t -> C.t -> t
+    (** [make c n] makes the linear expression [c + n]. *)
 
     (** Infix operations on expressions
 
@@ -230,16 +226,13 @@ module type Linear = sig
     val eval : subst -> t -> C.t
     (** Evaluate a linear expression given a substitution for its variables.
         TODO: document potential exceptions raised ?*)
-
   end
 
-  (** Linear constraints.
+  (** {2 Linear constraints.} *)
 
-      Linear constraints represent constraints on expressions.
-  *)
+  (** Linear constraints represent constraints on expressions. *)
   module Constr : sig
-
-    type op = [ `Leq | `Geq | `Lt | `Gt | `Eq ]
+    type op = [ `Leq | `Geq | `Lt | `Gt | `Eq | `Neq ]
     (** Arithmetic comparison operators. *)
 
     type +'a t = {
@@ -254,7 +247,7 @@ module type Linear = sig
     val pp : _ t CCFormat.printer
     (** Standard printing function. *)
 
-    val mk : Expr.t -> 'a -> 'a t
+    val of_expr : Expr.t -> 'a -> 'a t
     val make : Comb.t -> 'a -> C.t -> 'a t
     (** Create a constraint from a linear expression/combination and a constant. *)
 

@@ -106,30 +106,33 @@ end
 *)
 
 module type S_FULL = sig
-
   include S
 
-  module L : Expr.Linear.S with type C.t = Q.t and type Var.t = var
+  module L : Linear_expr_intf.S with type C.t = Q.t and type Var.t = var
 
-  type constr = L.Constr.op L.Constr.t
-  type pb = constr list
-  (** Problems for the simplex. *)
+  type op = [`Eq | `Leq | `Geq | `Lt | `Gt]
 
-  val pp : pb CCFormat.printer
+  type 'a constr = ([<op] as 'a) L.Constr.t
 
-  module Infix : sig
-    val (&&) : pb -> pb -> pb
+  module Problem : sig
+    type 'a t = ([<op] as 'a) constr list
+    (** Problems for the simplex. *)
+
+    val pp : _ t CCFormat.printer
+
+    module Infix : sig
+      val (&&) : 'a t -> 'a t -> 'a t
+    end
+    include module type of Infix
+
+    val eval : L.subst -> _ t -> bool
+    (** Evaluate a problem. *)
   end
-  include module type of Infix
 
-  val eval : L.subst -> pb -> bool
-  (** Evaluate a problem.
-      TODO: move the function to Expr ? *)
-
-  val add_constr : t -> constr -> unit
+  val add_constr : t -> _ constr -> unit
   (** Add a constraint to a simplex state. *)
 
-  val add_problem : t -> pb -> unit
+  val add_problem : t -> _ Problem.t -> unit
   (** Add a problem to a simplex state. *)
 
 end

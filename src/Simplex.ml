@@ -9,8 +9,9 @@
 
 open Containers
 
-module type VAR = Expr_intf.VAR
-module type FRESH = Expr_intf.FRESH
+module type VAR = Linear_expr_intf.VAR
+module type FRESH = Linear_expr_intf.FRESH
+module type VAR_GEN = Linear_expr_intf.VAR_GEN
 
 module type S = Simplex_intf.S
 module type S_FULL = Simplex_intf.S_FULL
@@ -61,11 +62,10 @@ end
 open Int.Infix
 
 (* Simplex Implementation *)
-module Make(Q : Rat.S)(Var: VAR)
-  : S with type var = Var.t and module Q = Q = struct
-
+module Make_inner(Q : Rat.S)(Var: VAR)(VMap : CCMap.S with type key=Var.t) = struct
   module Q = Q
-  module M = CCMap.Make(Var)
+  module Var_map = VMap
+  module M = Var_map
 
   (* Exceptions *)
   exception Unsat of Var.t
@@ -116,8 +116,6 @@ module Make(Q : Rat.S)(Var: VAR)
   let str_of_var = Format.to_string Var.pp
   let str_of_erat = Format.to_string Erat.pp
   let str_of_q = Format.to_string Q.pp
-
-  module Var_map = M
 
   type t = {
     tab : Q.t Matrix.t; (* the matrix of coefficients *)
@@ -640,33 +638,38 @@ module Make(Q : Rat.S)(Var: VAR)
       "(@[<hv>simplex@ :n-row %d :n-col %d@ :mat %a@ :assign %a@ :bounds %a@])"
       (Matrix.n_row t.tab) (Matrix.n_col t.tab) pp_mat t pp_assign t.assign
       pp_bounds t.bounds
-
 end
 
-module Make_full(Q : Rat.S)(F : FRESH)
-    (L: Expr.Linear.S with type C.t = Q.t and type Var.t = F.var) = struct
+module Make(Q:Rat.S)(Var:VAR) = Make_inner(Q)(Var)(CCMap.Make(Var))
 
-  include Make(Q)(L.Var)
-
+module Make_full(Q : Rat.S)(V : VAR_GEN)
+    (L : Linear_expr.S with type Var.t = V.t and type C.t = Q.t)
+= struct
+  include Make_inner(Q)(V)(L.Var_map)
   module L = L
 
-  type constr = L.Constr.op L.Constr.t
-  type pb = constr list
+  type op = [`Eq | `Leq | `Geq | `Lt | `Gt]
 
-  module Infix = struct
-    let (&&) = List.append
+  type 'a constr = ([<op] as 'a) L.Constr.t
+
+  module Problem = struct
+    type 'a t = ([<op] as 'a) constr list
+
+    module Infix = struct
+      let (&&) = List.append
+    end
+    include Infix
+
+    let eval subst = List.for_all (L.Constr.eval subst)
+
+    let pp out pb = Format.(hvbox @@ list ~sep:(return "@ @<1>∧ ") L.Constr.pp) out pb
   end
-  include Infix
 
-  let eval subst = List.for_all (L.Constr.eval subst)
-
-  let pp = Format.(hvbox @@ list ~sep:(return "@ @<1>∧ ") L.Constr.pp)
-
-  let fresh_var = F.create ()
+  let fresh_var = V.Fresh.create ()
 
   (* add a constraint *)
-  let add_constr (t:t) (c:constr) : unit =
-    let (x:var) = F.fresh fresh_var in
+  let add_constr (t:t) (c:[<op] constr) : unit =
+    let (x:var) = V.Fresh.fresh fresh_var in
     let e, op, q = L.Constr.split c in
     add_eq t (x, L.Comb.to_list e);
     begin match op with
@@ -677,7 +680,6 @@ module Make_full(Q : Rat.S)(F : FRESH)
       | `Eq -> add_bounds t ~strict_lower:false ~strict_upper:false (x,q,q)
     end
 
-  let add_problem (t:t) (pb:pb) : unit = List.iter (add_constr t) pb
-
+  let add_problem (t:t) (pb:_ Problem.t) : unit = List.iter (add_constr t) pb
 end
 

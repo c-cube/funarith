@@ -9,18 +9,18 @@ module Var = struct
   let pp out x = Format.fprintf out "X_%d" x
 
   let rand n : t QC.arbitrary = QC.make ~print:(Format.to_string pp) @@ QC.Gen.(0--n)
+
+  module Fresh = struct
+    type var = t
+    type t = int ref
+    let create() = ref ~-1
+    let fresh r = decr r; !r
+  end
 end
 
-module Fresh = struct
-  type var = Var.t
-  type t = int ref
-  let create() = ref ~-1
-  let fresh r = decr r; !r
-end
-
-module L = Funarith.Expr.Linear.Make(Funarith_zarith.Rat)(Var)
-
-module Spl = Funarith_zarith.Simplex.Make_full(Fresh)(L)
+module L = Funarith.Linear_expr.Make(Funarith_zarith.Rat)(Var)
+module Spl = Funarith_zarith.Simplex.Make_full(Var)(L)
+module Var_map = Spl.Var_map
 
 let rand_n low n : Z.t QC.arbitrary =
   QC.map ~rev:Z.to_int Z.of_int QC.(low -- n)
@@ -39,7 +39,7 @@ let rand_q : Q.t QC.arbitrary =
   in
   QC.set_shrink shrink qc
 
-type subst = Q.t Spl.Var_map.t
+type subst = Spl.L.subst
 
 (* NOTE: should arrive in qcheck at some point *)
 let filter_shrink (f:'a->bool) (a:'a QC.arbitrary) : 'a QC.arbitrary =
@@ -49,17 +49,24 @@ let filter_shrink (f:'a->bool) (a:'a QC.arbitrary) : 'a QC.arbitrary =
       let shr' x yield = shr x (fun y -> if f y then yield y) in
       QC.set_shrink shr' a
 
-module Expr = struct
+module Comb = struct
   include Spl.L.Comb
 
   let rand n : t QC.arbitrary =
-    (* generate non-empty expressions *)
     let a =
-      QC.map_same_type (fun e -> if is_empty e then monomial1 0 else e) @@
+      (*QC.map_same_type (fun e -> if is_empty e then monomial1 0 else e) @@*)
       QC.map ~rev:to_list of_list @@
       QC.list_of_size QC.Gen.(1--n) @@ QC.pair rand_q (Var.rand 10)
     in
     filter_shrink (fun e -> not (is_empty e)) a
+end
+
+module Expr = struct
+  include Spl.L.Expr
+
+  let rand n : t QC.arbitrary =
+    QC.map ~rev:(fun e->comb e, const e) (CCFun.uncurry make) @@
+    QC.pair (Comb.rand n) rand_q
 end
 
 module Constr = struct
@@ -67,20 +74,17 @@ module Constr = struct
 
   let shrink c : _ t QC.Iter.t =
     let open QC.Iter in
-    append
-      (Option.map_or ~default:empty
-         (fun s -> s c.expr >|= fun expr -> {c with expr})
-         (Expr.rand 5).QC.shrink)
-      (Option.map_or ~default:empty
-         (fun s -> s c.const >|= fun const -> {c with const}) rand_q.QC.shrink)
+    Option.map_or ~default:empty
+      (fun s -> s c.expr >|= fun expr -> {c with expr})
+      (Expr.rand 5).QC.shrink
 
-  let rand n : t QC.arbitrary =
+  let rand n : Spl.op t QC.arbitrary =
     let gen =
       QC.Gen.(
-        return make <*>
-          oneofl [Leq;Geq;Lt;Gt;Eq] <*>
+        return of_expr <*>
           (Expr.rand n).QC.gen <*>
-          rand_q.QC.gen)
+          oneofl [`Leq;`Geq;`Lt;`Gt;`Eq]
+      )
     in
     QC.make ~print:(Format.to_string pp) ~shrink gen
 end
@@ -88,14 +92,13 @@ end
 module Problem = struct
   include Spl.Problem
 
-  let rand ?(min=3) n : t QC.arbitrary =
-    let n = max min (max n 6) in
-    QC.list_of_size QC.Gen.(min -- n) @@ Constr.rand 10
-
+  let rand ?min:(m=3) n : Spl.op t QC.arbitrary =
+    let n = max m (max n 6) in
+    QC.list_of_size QC.Gen.(m -- n) @@ Constr.rand 10
 end
 
-let pp_subst : Spl.subst Format.printer =
-  Format.(map Spl.Var_map.to_seq @@
+let pp_subst : subst Format.printer =
+  Format.(map Spl.L.Var_map.to_seq @@
     within "{" "}" @@ hvbox @@ seq ~sep:(return ",@ ") @@
     pair ~sep:(return "@ @<1>→ ") Var.pp Q.pp_print
   )
@@ -143,7 +146,7 @@ let check_sound =
           | `Diff_not_0 e ->
             QC.Test.fail_reportf
               "(@[<hv>bad-certificat@ :problem %a@ :cert %a@ :diff %a@ :simplex-after  %a@ :simplex-before %a@])"
-              Problem.pp pb Spl.pp_cert cert Expr.pp e Spl.pp_full_state simplex Spl.pp_full_state old_simp
+              Problem.pp pb Spl.pp_cert cert Comb.pp (Comb.of_map e) Spl.pp_full_state simplex Spl.pp_full_state old_simp
         end
     end
   in
