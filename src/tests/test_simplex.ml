@@ -54,7 +54,7 @@ module Comb = struct
 
   let rand n : t QC.arbitrary =
     let a =
-      (*QC.map_same_type (fun e -> if is_empty e then monomial1 0 else e) @@*)
+      QC.map_same_type (fun e -> if is_empty e then monomial1 0 else e) @@
       QC.map ~rev:to_list of_list @@
       QC.list_of_size QC.Gen.(1--n) @@ QC.pair rand_q (Var.rand 10)
     in
