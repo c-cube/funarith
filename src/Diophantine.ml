@@ -42,8 +42,6 @@ module Make(Z : Int.DERIVED) = struct
       );
       {eqns;n_vars}
 
-    let[@inline] len e = Array.length e.eqns
-    let[@inline] n_vars e = e.n_vars
     let[@inline] eqns e = e.eqns
 
     (** State used for computing solutions
