@@ -1,0 +1,4 @@
+
+Specialization of {!Funarith} algorithms for Zarith (OCaml efficient wrapper around GMP).
+
+{!modules: Funarith_zarith}

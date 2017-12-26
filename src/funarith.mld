@@ -1,0 +1,6 @@
+
+Library with implementations of classic algorithms for Arihmetic. The algorithms
+are OCaml functors so that the user can parametrize with any implementation
+of numbers, variables, etc.
+
+{!modules: Funarith}
