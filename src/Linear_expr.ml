@@ -152,7 +152,7 @@ module Make(C : COEF)(Var : VAR) = struct
     let make comb op const =
       of_expr (Expr.make comb (C.neg const)) op
 
-    let split { expr = Expr.{const; comb; } ; op; } =
+    let split { expr = Expr.({const; comb; }) ; op; } =
       comb, op, C.neg const
 
     let eval subst c =
