@@ -19,7 +19,7 @@ module Var = struct
 end
 
 module L = Funarith.Linear_expr.Make(Funarith_zarith.Rat)(Var)
-module Spl = Funarith_zarith.Simplex.Make_full(Var)(L)
+module Spl = Funarith_zarith.Simplex.Make_full_for_expr(Var)(L)
 module Var_map = Spl.Var_map
 
 let rand_n low n : Z.t QC.arbitrary =

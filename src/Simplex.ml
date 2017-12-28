@@ -642,7 +642,7 @@ end
 
 module Make(Q:Rat.S)(Var:VAR) = Make_inner(Q)(Var)(CCMap.Make(Var))
 
-module Make_full(Q : Rat.S)(V : VAR_GEN)
+module Make_full_for_expr(Q : Rat.S)(V : VAR_GEN)
     (L : Linear_expr.S with type Var.t = V.t and type C.t = Q.t)
 = struct
   include Make_inner(Q)(V)(L.Var_map)
@@ -683,3 +683,5 @@ module Make_full(Q : Rat.S)(V : VAR_GEN)
   let add_problem (t:t) (pb:_ Problem.t) : unit = List.iter (add_constr t) pb
 end
 
+module Make_full(Q : Rat.S)(V : VAR_GEN)
+  = Make_full_for_expr(Q)(V)(Linear_expr.Make(Q)(V))

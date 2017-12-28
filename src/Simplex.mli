@@ -15,9 +15,14 @@ module Make(Q : Rat.S)(V : VAR) :
      and module Var_map = CCMap.Make(V)
 
 (** High-level simplex interface *)
-module Make_full(Q : Rat.S)(V : VAR_GEN)
+module Make_full_for_expr(Q : Rat.S)(V : VAR_GEN)
     (L : Linear_expr.S with type Var.t = V.t and type C.t = Q.t)
   : S_FULL with module Q = Q
             and type var = V.t
             and module L = L
             and module Var_map = L.Var_map
+
+module Make_full(Q : Rat.S)(V : VAR_GEN)
+  : S_FULL with module Q = Q
+            and type var = V.t
+            and type L.var = V.t
