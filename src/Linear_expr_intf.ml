@@ -84,6 +84,15 @@ module type VAR_GEN = sig
   module Fresh : FRESH with type var := t
 end
 
+module type VAR_EXTENDED = sig
+  type user_var (** original variables *)
+
+  type t =
+    | User of user_var
+    | Internal of int
+
+  include VAR_GEN with type t := t
+end
 
 (** {2 Linear expressions & formulas} *)
 

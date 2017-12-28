@@ -7,8 +7,9 @@ module type COEF = Linear_expr_intf.COEF
 module type VAR = Linear_expr_intf.VAR
 module type FRESH = Linear_expr_intf.FRESH
 module type VAR_GEN = Linear_expr_intf.VAR_GEN
+module type VAR_EXTENDED = Linear_expr_intf.VAR_EXTENDED
 
-  module type S = Linear_expr_intf.S
+module type S = Linear_expr_intf.S
 
 module Make(C : COEF)(Var : VAR) = struct
   module C = C
@@ -165,5 +166,29 @@ module Make(C : COEF)(Var : VAR) = struct
         | `Eq -> C.compare v C.zero = 0
         | `Neq -> C.compare v C.zero <> 0
       end
+  end
+end
+
+module Make_var_gen(Var : VAR) = struct
+  type user_var = Var.t
+
+  type t =
+    | User of user_var
+    | Internal of int
+
+  let compare (a:t) b : int = match a, b with
+    | User a, User b -> Var.compare a b
+    | User _, Internal _ -> -1
+    | Internal _, User _ -> 1
+    | Internal i, Internal j -> CCInt.compare i j
+
+  let pp out = function
+    | User v -> Var.pp out v
+    | Internal i -> Format.fprintf out "internal_v_%d" i
+
+  module Fresh = struct
+    type t = int ref
+    let create() = ref 0
+    let fresh r = Internal (CCRef.get_then_incr r)
   end
 end
