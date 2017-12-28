@@ -260,6 +260,13 @@ module type S = sig
     val make : Comb.t -> 'a -> C.t -> 'a t
     (** Create a constraint from a linear expression/combination and a constant. *)
 
+    val geq : Comb.t -> C.t -> [>`Geq] t
+    val leq : Comb.t -> C.t -> [>`Leq] t
+    val gt: Comb.t -> C.t -> [>`Gt] t
+    val lt : Comb.t -> C.t -> [>`Lt] t
+    val eq : Comb.t -> C.t -> [>`Eq] t
+    val neq : Comb.t -> C.t -> [>`Neq] t
+
     val op : 'a t -> 'a
     val expr : _ t -> Expr.t
     (** Extract the given part from a constraint. *)

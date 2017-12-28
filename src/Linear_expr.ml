@@ -148,10 +148,16 @@ module Make(C : COEF)(Var : VAR) = struct
     let op t = t.op
     let expr t = t.expr
 
-    let of_expr expr op = { expr; op; }
+    let[@inline] of_expr expr op = { expr; op; }
 
-    let make comb op const =
-      of_expr (Expr.make comb (C.neg const)) op
+    let make comb op const = of_expr (Expr.make comb (C.neg const)) op
+
+    let geq e c = make e `Geq c
+    let leq e c = make e `Leq c
+    let gt e c = make e `Gt c
+    let lt e c = make e `Lt c
+    let eq e c = make e `Eq c
+    let neq e c = make e `Neq c
 
     let split {expr = {Expr.const; comb}; op} =
       comb, op, C.neg const
