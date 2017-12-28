@@ -210,7 +210,7 @@ module type S = sig
     val of_comb : Comb.t -> t
     (** Combination without constant *)
 
-    val of_list : (C.t * Var.t) list -> t
+    val of_list : C.t -> (C.t * Var.t) list -> t
 
     val make : Comb.t -> C.t -> t
     (** [make c n] makes the linear expression [c + n]. *)

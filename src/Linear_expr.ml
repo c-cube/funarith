@@ -103,7 +103,7 @@ module Make(C : COEF)(Var : VAR) = struct
 
     let of_const = make Comb.empty
     let of_comb c = make c C.zero
-    let of_list l = make (Comb.of_list l) C.zero
+    let of_list c l = make (Comb.of_list l) c
     let zero = of_const C.zero
 
     let is_zero e = C.equal C.zero e.const  && Comb.is_empty e.comb
