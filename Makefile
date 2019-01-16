@@ -4,16 +4,16 @@ J?=3
 all: build test
 
 build:
-	jbuilder build @install -j $J
+	@dune build @install -j $J
 
 clean:
-	jbuilder clean
+	@dune clean
 
 doc:
-	jbuilder build @doc
+	@dune build @doc
 
 test:
-	jbuilder runtest --no-buffer -j $J
+	@dune runtest --no-buffer -j $J
 
 WATCH?=all
 watch:
