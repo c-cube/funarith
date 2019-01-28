@@ -13,7 +13,7 @@ doc:
 	@dune build @doc
 
 test:
-	@dune runtest --no-buffer -j $J
+	@dune runtest --force --no-buffer -j $J
 
 WATCH?=all
 watch:
