@@ -40,10 +40,11 @@ module Make(C : COEF)(Var : VAR) = struct
       let c' = C.(c + c') in
       if C.equal C.zero c' then Var_map.remove x e else Var_map.add x c' e
 
-    let[@inline] map2 ~f a b =
+    let[@inline] map2 ~fr ~f a b =
       Var_map.merge_safe
         ~f:(fun _ rhs -> match rhs with
-            | `Left x | `Right x -> Some x
+            | `Left x -> Some x
+            | `Right x -> Some (fr x)
             | `Both (x,y) -> f x y)
         a b
 
@@ -58,8 +59,8 @@ module Make(C : COEF)(Var : VAR) = struct
         m Var_map.empty
 
     module Infix = struct
-      let (+) = map2 ~f:(fun a b -> some_if_nzero C.(a + b))
-      let (-) = map2 ~f:(fun a b -> some_if_nzero C.(a - b))
+      let (+) = map2 ~fr:(fun x->x) ~f:(fun a b -> some_if_nzero C.(a + b))
+      let (-) = map2 ~fr:C.neg ~f:(fun a b -> some_if_nzero C.(a - b))
       let ( * ) q = filter_map ~f:(fun x -> some_if_nzero C.(x * q))
     end
 
