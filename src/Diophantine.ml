@@ -1,4 +1,3 @@
-
 module Fmt = CCFormat
 module Vec = CCVector
 
@@ -241,7 +240,7 @@ module Make(Z : Int.DERIVED) = struct
       solve_main st f;
       st.solutions
 
-    let solve ?cut (t:t) : solution Sequence.t =
+    let solve ?cut (t:t) : solution Iter.t =
       fun yield ->
         let _ = solve_inner ?cut t ~f:yield in
         ()

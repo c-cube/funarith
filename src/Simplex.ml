@@ -325,9 +325,9 @@ module Make_inner(Q : Rat.S)(Var: VAR)(VMap : CCMap.S with type key=Var.t) = str
   let add_upper_bound t ?strict x u = add_bounds t ?strict_upper:strict (x,Q.minus_inf,u)
 
   (* full assignment *)
-  let full_assign (t:t) : (var * Erat.t) Sequence.t =
-    Sequence.append (Vec.to_seq t.nbasic) (Vec.to_seq t.basic)
-    |> Sequence.map (fun x -> x, value t x)
+  let full_assign (t:t) : (var * Erat.t) Iter.t =
+    Iter.append (Vec.to_seq t.nbasic) (Vec.to_seq t.basic)
+    |> Iter.map (fun x -> x, value t x)
 
   let[@inline] min x y = if Q.compare x y < 0 then x else y
 
@@ -361,11 +361,11 @@ module Make_inner(Q : Rat.S)(Var: VAR)(VMap : CCMap.S with type key=Var.t) = str
     in
     if Q.compare emax Q.one >= 0 then Q.one else emax
 
-  let get_full_assign_seq (t:t) : _ Sequence.t =
+  let get_full_assign_seq (t:t) : _ Iter.t =
     let e = solve_epsilon t in
     let f = Erat.evaluate e in
     full_assign t
-    |> Sequence.map (fun (x,v) -> x, f v)
+    |> Iter.map (fun (x,v) -> x, f v)
 
   let get_full_assign t : Q.t Var_map.t = Var_map.of_seq (get_full_assign_seq t)
 

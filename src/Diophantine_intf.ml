@@ -1,4 +1,3 @@
-
 (** {2 Abstract representation of Integers} *)
 
 module type S = sig
@@ -37,7 +36,7 @@ module type S = sig
     (** Get underlying equations.
         {b NOTE}: do not modify! *)
 
-    val solve : ?cut:(solution->bool) -> t -> solution Sequence.t
+    val solve : ?cut:(solution->bool) -> t -> solution Iter.t
     (** Return an iterator on minimum solutions.
         Any solution to the initial problem is a linear combination of these
         minimal solutions.
@@ -57,7 +56,7 @@ module type S = sig
     (**/**)
   end
 
-  val solve : ?cut:(solution->bool) -> Z.t array array -> solution Sequence.t
+  val solve : ?cut:(solution->bool) -> Z.t array array -> solution Iter.t
   (** Return an iterator on minimum solutions.
       Any solution to the initial problem is a linear combination of these
       minimal solutions.

@@ -1,4 +1,3 @@
-
 open Containers
 module QC = QCheck
 module D = Funarith_zarith.Diophantine
@@ -20,7 +19,7 @@ let test_example () =
     [| 0; 1; 1; 1 |];
     [| 4; 2; 1; 0 |];
   ] |> List.map mk_arr in
-  let sols = S.solve eqns |> Sequence.to_list in
+  let sols = S.solve eqns |> Iter.to_list in
   OUnit.assert_equal ~printer:string_of_int ~msg:"num solutions" 2 (List.length sols);
   OUnit.assert_bool "solutions non trivial"
     (List.for_all (Array.exists (fun x->not (Z.equal Z.zero x))) sols);

@@ -23,8 +23,8 @@ module type S = sig
       @param cache if provided, store results in the cache.
       @raise Invalid_argument if the number is negative *)
 
-  val primes_leq : ?cache:Cache.t -> Z.t -> Z.t Sequence.t
-  (** Sequence of prime numbers smaller than (or equal to)
+  val primes_leq : ?cache:Cache.t -> Z.t -> Z.t Iter.t
+  (** Iterator of prime numbers smaller than (or equal to)
       the given number.
       @param cache if [Some c], use [c] for storing intermediate results *)
 end

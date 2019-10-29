@@ -1,4 +1,3 @@
-
 module Q = QCheck
 
 module Pr = Funarith_zarith.Prime
@@ -17,7 +16,7 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
         Z.to_int n=2 || Z.to_int n=3 ||
         (
           Z.to_int n >= 4 &&
-          Sequence.(2 -- Z.to_int n
+          Iter.(2 -- Z.to_int n
                     |> map Z.of_int
                     |> for_all
                       (fun m -> Z.equal m n || not (Z.equal Z.zero (Z.rem n m))))
@@ -29,14 +28,14 @@ module Make(X : sig val cache : Pr.Cache.t option end) = struct
       (rand_n 1_000_000) prop
 
   let check_primes_leq_sound =
-    let prop n = Pr.primes_leq ?cache n |> Sequence.for_all Pr.is_prime in
+    let prop n = Pr.primes_leq ?cache n |> Iter.for_all Pr.is_prime in
     Q.Test.make ~count:10 ~name:("primes_leq_sound"^suffix) (rand_n 20_000) prop
 
   let check_primes_leq_exhaustive =
     let prop n =
-      let l1 = Pr.primes_leq ?cache (Z.of_int n) |> Sequence.to_list in
+      let l1 = Pr.primes_leq ?cache (Z.of_int n) |> Iter.to_list in
       let l2 =
-        Sequence.(2 -- n |> map Z.of_int |> filter Pr.is_prime |> Sequence.to_list)
+        Iter.(2 -- n |> map Z.of_int |> filter Pr.is_prime |> Iter.to_list)
       in
       CCList.equal Z.equal l1 l2
     in
