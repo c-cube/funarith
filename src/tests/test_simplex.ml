@@ -1,4 +1,3 @@
-
 open Containers
 
 module QC = QCheck
@@ -26,8 +25,8 @@ let rand_n low n : Z.t QC.arbitrary =
   QC.map ~rev:Z.to_int Z.of_int QC.(low -- n)
 
 let rand_q : Q.t QC.arbitrary =
-  let n1 = rand_n ~-100 100 in
-  let n2 = rand_n 1 50 in
+  let n1 = rand_n ~-100_000 100_000 in
+  let n2 = rand_n 1 40_000 in
   let qc =
     QC.map ~rev:(fun q -> Q.num q, Q.den q)
       (fun (x,y) -> Q.make x y)
@@ -150,7 +149,7 @@ let check_sound =
         end
     end
   in
-  QC.Test.make ~long_factor:10 ~count:2_000 ~name:"simplex_sound" (Problem.rand 20) prop
+  QC.Test.make ~long_factor:10 ~count:300 ~name:"simplex_sound" (Problem.rand 20) prop
 
 let check_scalable =
   let prop pb =
@@ -159,7 +158,7 @@ let check_scalable =
     ignore (Spl.solve simplex);
     true
   in
-  QC.Test.make ~long_factor:2 ~count:20 ~name:"simplex_scalable" (Problem.rand ~min:100 100) prop
+  QC.Test.make ~long_factor:2 ~count:10 ~name:"simplex_scalable" (Problem.rand ~min:150 150) prop
 
 
 let props = [
