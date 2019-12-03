@@ -3,7 +3,6 @@
 module type S = sig
   module Z : Int.DERIVED
 
-  exception Empty
   exception Inconsistent_lengths
 
   module Solution : sig
@@ -22,7 +21,6 @@ module type S = sig
     (** [make eqns] builds the system [eqns = 0], where each [eqn : Z.t array]
         in [eqns] is an array [ [| a1, …, an |] ] representing
         the equation [a1 x1 + a2 x2 + … + an xn = 0].
-        @raise Empty if the array is empty
         @raise Inconsistent_lengths if all equations don't have the same length
     *)
 
@@ -63,13 +61,11 @@ module type S = sig
       @param cut called on every intermediate tuple traversed by
         the algorithm (in an increasing order). If it returns [true],
         the tuple (and all solutions below it) is dropped.
-      @raise Empty if the array is empty
       @raise Inconsistent_lengths if all equations don't have the same length
   *)
 
   val solve_l : ?cut:(solution->bool) -> Z.t array array -> solution list
   (** Eager version of {!solve}, returns the (reverse) list of solutions
-      @raise Empty if the array is empty
       @raise Inconsistent_lengths if all equations don't have the same length
   *)
 

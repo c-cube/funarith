@@ -7,6 +7,11 @@ let mk_ar2 = Array.map mk_arr
 
 module S = D.Homogeneous_system
 
+let test_empty () =
+  let eqns = S.make [||] in
+  let sols = S.solve_l eqns in
+  OUnit.assert_equal [ [||] ] sols
+
 let test_example () =
   (* example from the paper *)
   let eqns =
@@ -29,6 +34,7 @@ let test_example () =
   ()
 
 let suite = OUnit.( [
+  "test_empty" >:: test_empty;
   "test_example" >:: test_example;
 ])
 

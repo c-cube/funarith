@@ -19,7 +19,7 @@ let sqrt_naive i =
   )
 
 module Default : FULL with type t = int = struct
-  include Pervasives
+  include CCShims_.Stdlib
   include CCInt
   let sqrt = sqrt_naive
   let[@inline] divexact x y = x/y

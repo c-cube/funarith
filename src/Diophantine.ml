@@ -6,7 +6,6 @@ module type S = Diophantine_intf.S
 module Make(Z : Int.DERIVED) = struct
   module Z = Z
 
-  exception Empty
   exception Inconsistent_lengths
 
   let[@inline] is_zero x : bool = Z.equal Z.zero x
@@ -34,12 +33,15 @@ module Make(Z : Int.DERIVED) = struct
     let[@inline] len t = Array.length t.eqns
 
     let make eqns : t =
-      if Array.length eqns = 0 then raise Empty;
-      let n_vars = Array.length eqns.(0) in
-      if not (CCArray.for_all (fun a -> Array.length a = n_vars) eqns) then (
-        raise Inconsistent_lengths;
-      );
-      {eqns;n_vars}
+      if Array.length eqns = 0 then (
+        {eqns; n_vars=0}
+      ) else (
+        let n_vars = Array.length eqns.(0) in
+        if not (CCArray.for_all (fun a -> Array.length a = n_vars) eqns) then (
+          raise Inconsistent_lengths;
+        );
+        {eqns;n_vars}
+      )
 
     let[@inline] eqns e = e.eqns
 
@@ -236,9 +238,15 @@ module Make(Z : Int.DERIVED) = struct
 
     (* call [f] on every solution, and return the final list *)
     let solve_inner ?(cut=default_cut) t ~f : _ list =
-      let st = mk_state ~cut t in
-      solve_main st f;
-      st.solutions
+      if t.n_vars = 0 then (
+        let sol = [||] in
+        f sol;
+        [sol]
+      ) else (
+        let st = mk_state ~cut t in
+        solve_main st f;
+        st.solutions
+      )
 
     let solve ?cut (t:t) : solution Iter.t =
       fun yield ->
