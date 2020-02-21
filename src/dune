@@ -2,6 +2,6 @@
  (name funarith)
  (public_name funarith)
  (libraries containers iter)
- (flags :standard -w +a-4-42-44-48-50-58-60@8 -color always)
+ (flags :standard -warn-error -3 -color always)
  (ocamlopt_flags :standard -O3 -bin-annot -unbox-closures
    -unbox-closures-factor 20))

@@ -43,8 +43,10 @@ end
 module type VAR = sig
   type t
   (** Variable type. *)
+
   val compare : t -> t -> int
   (** Standard comparison function on variables. *)
+
   val pp : t CCFormat.printer
   (** Printer for variables. *)
 end
@@ -158,8 +160,10 @@ module type S = sig
     module Infix : sig
       val (+) : t -> t -> t
       (** Addition between combinations. *)
+
       val (-) : t -> t -> t
       (** Substraction between combinations. *)
+
       val ( * ) : C.t -> t -> t
       (** Multiplication by a constant. *)
     end
@@ -222,8 +226,10 @@ module type S = sig
     module Infix : sig
       val (+) : t -> t -> t
       (** Addition between expressions. *)
+
       val (-) : t -> t -> t
       (** Substraction between expressions. *)
+
       val ( * ) : C.t -> t -> t
       (** Multiplication by a constant. *)
     end

@@ -59,7 +59,7 @@ let rand_system : S.t QC.arbitrary =
 
 (* find if there's an equation not satisfied by [sol] *)
 let find_bad_eqn (sys:S.t) (sol:D.solution) : _ option =
-  CCArray.find
+  CCArray.find_map
     (fun eqn ->
        assert (Array.length eqn = Array.length sol);
        let sum = Array.fold2 (fun acc x y -> Z.(acc + x * y)) Z.zero eqn sol in
