@@ -15,12 +15,9 @@ doc:
 test:
 	@dune runtest --force --no-buffer -j $J
 
-WATCH?=all
+WATCH?=@all
 watch:
-	while find src/ -print0 | xargs -0 inotifywait -e delete_self -e modify ; do \
-		echo "============ at `date` ==========" ; \
-		make $(WATCH); \
-	done
+	@dune build $(WATCH) -w
 
 ocp-indent:
 	@which ocp-indent > /dev/null || { \
