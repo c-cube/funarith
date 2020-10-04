@@ -11,11 +11,11 @@ build: [
   ["dune" "build" "@doc" "-p" name "-j" jobs] {with-doc}
 ]
 depends: [
-  "containers" { >= "1.0" }
+  "containers" { >= "2.8" & < "4.0"  }
   "iter" { >= "1.0" }
-  "dune" { build }
-  "ounit" { with-test }
-  "qcheck" { with-test }
+  "dune"
+  "ounit2" { with-test }
+  "qcheck" { with-test & >= "0.15" }
   "zarith" { with-test }
 ]
 depopts: [

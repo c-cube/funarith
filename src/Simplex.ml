@@ -326,7 +326,7 @@ module Make_inner(Q : Rat.S)(Var: VAR)(VMap : CCMap.S with type key=Var.t) = str
 
   (* full assignment *)
   let full_assign (t:t) : (var * Erat.t) Iter.t =
-    Iter.append (Vec.to_seq t.nbasic) (Vec.to_seq t.basic)
+    Iter.append (Vec.to_iter t.nbasic) (Vec.to_iter t.basic)
     |> Iter.map (fun x -> x, value t x)
 
   let[@inline] min x y = if Q.compare x y < 0 then x else y
@@ -367,7 +367,7 @@ module Make_inner(Q : Rat.S)(Var: VAR)(VMap : CCMap.S with type key=Var.t) = str
     full_assign t
     |> Iter.map (fun (x,v) -> x, f v)
 
-  let get_full_assign t : Q.t Var_map.t = Var_map.of_seq (get_full_assign_seq t)
+  let get_full_assign t : Q.t Var_map.t = Var_map.of_iter (get_full_assign_seq t)
 
   (* Find nbasic variable suitable for pivoting with [x].
      A nbasic variable [y] is suitable if it "goes into the right direction"
